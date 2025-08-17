@@ -16,6 +16,7 @@
 #include "shared/sdk/Math.hpp"
 //#include "sdk/helpers/NativeObject.hpp"
 //#include "sdk/Renderer.hpp"
+#include "vr/D3D11Component.hpp"
 #include "vr/D3D12Component.hpp"
 //#include "vr/OverlayComponent.hpp"
 #include "vr/runtimes/OpenXR.hpp"
@@ -352,6 +353,8 @@ private:
 
         if (m_is_d3d12) {
             m_d3d12.openxr().destroy_swapchains();
+        } else {
+            m_d3d11.openxr().destroy_swapchains();
         }
 
         m_openxr.reset();
@@ -501,6 +504,7 @@ private:
 
     Vector4f m_raw_projections[2]{};
 
+    vrmod::D3D11Component m_d3d11{};
     vrmod::D3D12Component m_d3d12{};
 //    vrmod::OverlayComponent m_overlay_component{};
 
@@ -636,6 +640,7 @@ private:
 
     bool m_use_rotation{true};
 
+    friend class vrmod::D3D11Component;
     friend class vrmod::D3D12Component;
 //    friend class vrmod::OverlayComponent;
 public:

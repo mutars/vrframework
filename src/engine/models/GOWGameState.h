@@ -1,7 +1,7 @@
 #pragma once
 #include <engine/memory/offsets.h>
 
-struct GOWRGameState
+struct GOWGameState
 {
     enum GameState {
         G_UNK,

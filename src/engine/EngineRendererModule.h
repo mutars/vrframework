@@ -1,9 +1,6 @@
 #pragma once
 
 #include <engine/memory/offsets.h>
-#include <sl.h>
-//#include <sl_reflex.h>
-//#include <sl_result.h>
 #include <safetyhook/inline_hook.hpp>
 #include <utility/PointerHook.hpp>
 #include <utils/FunctionHook.h>
@@ -19,7 +16,6 @@ public:
         return instance;
     }
 
-    static uintptr_t onSlPCLSetMarker(uint32_t marker, const sl::FrameToken& frame);
     static char onCalcRenderSize(int* resolutions, float aspectRatio, uint8_t* recreateGraph, float* scale);
 
     static void setWindowSize();

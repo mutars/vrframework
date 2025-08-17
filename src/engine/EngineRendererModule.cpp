@@ -27,11 +27,11 @@ void EngineRendererModule::InstallHooks()
     //        spdlog::error("Failed to hook slGetNewFrameToken");
     //    }
 
-    auto simStartFunct = memory::simulation_start_fn();
-    m_simulationStartMarker = safetyhook::create_inline((void*)simStartFunct, (void*)&EngineRendererModule::onSimulationStartMarker);
-
-    auto letterBoxFn = memory::calc_render_size_letterbox_fn();
-    m_letterBoxHook = safetyhook::create_inline((void*)letterBoxFn, (void*)&EngineRendererModule::onCalcRenderSize);
+//    auto simStartFunct = memory::simulation_start_fn();
+//    m_simulationStartMarker = safetyhook::create_inline((void*)simStartFunct, (void*)&EngineRendererModule::onSimulationStartMarker);
+//
+//    auto letterBoxFn = memory::calc_render_size_letterbox_fn();
+//    m_letterBoxHook = safetyhook::create_inline((void*)letterBoxFn, (void*)&EngineRendererModule::onCalcRenderSize);
 
 //    auto slPCLSetMarkerFn = GetProcAddress(p_hm_sl_interposter, "slPCLSetMarker");
 //    m_slPCLSetMarker  = std::make_unique<FunctionHook>((void**)slPCLSetMarkerFn, (void*)&EngineRendererModule::onSlPCLSetMarker);
@@ -86,55 +86,55 @@ void EngineRendererModule::setWindowSize()
     SetWindowPos(hWnd, nullptr, 0, 0, nWidth, nHeight, 0x604);
 }
 
-
-void EngineRendererModule::onSimulationStartMarker() {
-    static auto addr = memory::pcl_set_marker_pointer_fn();
-    static auto instance = Get();
-    static bool dynamic_reflex_set_marker = false;
-    if(!dynamic_reflex_set_marker && *(uintptr_t*)addr != 0) {
-        dynamic_reflex_set_marker = true;
-        instance->m_slPCLSetMarker2 = std::make_unique<PointerHook>((void**)addr, (void*)&EngineRendererModule::onSlPCLSetMarker);
-    }
-    instance->m_simulationStartMarker.call();
-}
-
-uintptr_t EngineRendererModule::onSlPCLSetMarker(uint32_t marker, const sl::FrameToken& frame)
-{
-    static auto instance = Get();
-    static bool engine_notified = false;
-    static     auto        vr            = VR::get();
-    static bool            sync_marker_started = false;
-    static int frames_since_reset = 0;
-//    spdlog::info("onSlPCLSetMarker m={} f={}", marker, (int)frame);
-    if ((marker == 0 || marker == 1) && !engine_notified) {
-        vr->m_engine_frame_count = (int)frame;
-        engine_notified = true;
-        vr->on_engine_tick(nullptr);
-    }
-    // Reset notification if marker is 1
-    if (marker == 1) {
+//
+//void EngineRendererModule::onSimulationStartMarker() {
+//    static auto addr = memory::pcl_set_marker_pointer_fn();
+//    static auto instance = Get();
+//    static bool dynamic_reflex_set_marker = false;
+//    if(!dynamic_reflex_set_marker && *(uintptr_t*)addr != 0) {
+//        dynamic_reflex_set_marker = true;
+//        instance->m_slPCLSetMarker2 = std::make_unique<PointerHook>((void**)addr, (void*)&EngineRendererModule::onSlPCLSetMarker);
+//    }
+//    instance->m_simulationStartMarker.call();
+//}
+//
+//uintptr_t EngineRendererModule::onSlPCLSetMarker(uint32_t marker, const sl::FrameToken& frame)
+//{
+//    static auto instance = Get();
+//    static bool engine_notified = false;
+//    static     auto        vr            = VR::get();
+//    static bool            sync_marker_started = false;
+//    static int frames_since_reset = 0;
+////    spdlog::info("onSlPCLSetMarker m={} f={}", marker, (int)frame);
+//    if ((marker == 0 || marker == 1) && !engine_notified) {
+//        vr->m_engine_frame_count = (int)frame;
+//        engine_notified = true;
 //        vr->on_engine_tick(nullptr);
-        engine_notified = false;
-    }
-
-    if(marker == 2) {
-        vr->m_render_frame_count = (int)frame;
-        vr->on_begin_rendering(nullptr);
-    }
-    if(marker == 4) {
-        vr->m_presenter_frame_count = (int)frame;
-    }
-
-    if(marker == 2) {
-        g_framework->run_imgui_frame(false);
-    }
-
-    if (marker == 3) {
-        instance->setWindowSize();
-    }
-    static auto original_fn = instance->m_slPCLSetMarker2->get_original<decltype(EngineRendererModule::onSlPCLSetMarker)*>();
-    return original_fn(marker, frame);
-}
+//    }
+//    // Reset notification if marker is 1
+//    if (marker == 1) {
+////        vr->on_engine_tick(nullptr);
+//        engine_notified = false;
+//    }
+//
+//    if(marker == 2) {
+//        vr->m_render_frame_count = (int)frame;
+//        vr->on_begin_rendering(nullptr);
+//    }
+//    if(marker == 4) {
+//        vr->m_presenter_frame_count = (int)frame;
+//    }
+//
+//    if(marker == 2) {
+//        g_framework->run_imgui_frame(false);
+//    }
+//
+//    if (marker == 3) {
+//        instance->setWindowSize();
+//    }
+//    static auto original_fn = instance->m_slPCLSetMarker2->get_original<decltype(EngineRendererModule::onSlPCLSetMarker)*>();
+//    return original_fn(marker, frame);
+//}
 
 
 //uintptr_t EngineRendererModule::onSlPCLSetMarker(uint32_t marker, const sl::FrameToken& frame)
@@ -188,28 +188,28 @@ uintptr_t EngineRendererModule::onSlPCLSetMarker(uint32_t marker, const sl::Fram
 //    static auto original_fn = instance->m_slPCLSetMarker2->get_original<decltype(EngineRendererModule::onSlPCLSetMarker)*>();
 //    return original_fn(marker, frame);
 //}
-
-char EngineRendererModule::onCalcRenderSize(int* resolutions, float aspectRatio, uint8_t* recreateGraph, float* scale)
-{
-    static auto instance = Get();
-    static int tick = 0;
-    static auto vr = VR::get();
-    if(vr->is_hmd_active()) {
-//        spdlog::info("resolutions[0] = {}, resolutions[1] = {}, resolutions[2] = {}, resolutions[3] = {}, resolutions[4] = {}, resolutions[5] = {}, aspctRatip = {}",
-//                     resolutions[0], resolutions[1], resolutions[2], resolutions[3], resolutions[4], resolutions[5], aspectRatio);
-//        resolutions[0] = 2500;
-        resolutions[1] = resolutions[5];
-        resolutions[3] = resolutions[5];
-
-//        resolutions[2] = 2500;
-//        resolutions[3] = 2500;
-//        resolutions[4] = 2500;
-//        resolutions[5] = 2500;
-        aspectRatio = (float)resolutions[4]/(float)resolutions[5];
-    }
-    if(g_framework->is_ready()) {
-        tick++;
-    }
-
-    return instance->m_letterBoxHook.call<char>(resolutions, aspectRatio, recreateGraph, scale);
-}
+//
+//char EngineRendererModule::onCalcRenderSize(int* resolutions, float aspectRatio, uint8_t* recreateGraph, float* scale)
+//{
+//    static auto instance = Get();
+//    static int tick = 0;
+//    static auto vr = VR::get();
+//    if(vr->is_hmd_active()) {
+////        spdlog::info("resolutions[0] = {}, resolutions[1] = {}, resolutions[2] = {}, resolutions[3] = {}, resolutions[4] = {}, resolutions[5] = {}, aspctRatip = {}",
+////                     resolutions[0], resolutions[1], resolutions[2], resolutions[3], resolutions[4], resolutions[5], aspectRatio);
+////        resolutions[0] = 2500;
+//        resolutions[1] = resolutions[5];
+//        resolutions[3] = resolutions[5];
+//
+////        resolutions[2] = 2500;
+////        resolutions[3] = 2500;
+////        resolutions[4] = 2500;
+////        resolutions[5] = 2500;
+//        aspectRatio = (float)resolutions[4]/(float)resolutions[5];
+//    }
+//    if(g_framework->is_ready()) {
+//        tick++;
+//    }
+//
+//    return instance->m_letterBoxHook.call<char>(resolutions, aspectRatio, recreateGraph, scale);
+//}

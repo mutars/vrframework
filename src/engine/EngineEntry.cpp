@@ -2,18 +2,17 @@
 #include "EngineCameraModule.h"
 #include "EngineRendererModule.h"
 #include "UIComponent.h"
-#include "models/GOWRGameState.h"
+#include "models/GOWGameState.h"
 #include <engine/models/ModSettings.h>
 #include <engine/models/StatefullData.h>
 #include <mods/VR.hpp>
-#include <nvidia/UpscalerAfrNvidiaModule.h>
 
 std::optional<std::string> EngineEntry::on_initialize()
 {
-    EngineRendererModule::Get()->InstallHooks();
+//    EngineRendererModule::Get()->InstallHooks();
 //    UIComponent::Get()->InstallHooks();
-    EngineCameraModule::Get()->InstallHooks();
-    UpscalerAfrNvidiaModule::Get();
+//    EngineCameraModule::Get()->InstallHooks();
+//    UpscalerAfrNvidiaModule::Get();
     return Mod::on_initialize();
 }
 

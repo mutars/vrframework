@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <filesystem>
 
+#include <_deps/directxtk12-src/Inc/GraphicsMemory.h>
 #include "mods/vr/d3d12/CommandContext.hpp"
 #include <imgui.h>
 #ifdef GOWVR_EXPERIMENTAL
@@ -16,7 +17,7 @@
 
 class Mods;
 
-//#include "D3D11Hook.hpp"
+#include "D3D11Hook.hpp"
 #include "D3D12Hook.hpp"
 #include "DInputHook.hpp"
 #include "WindowsMessageHook.hpp"
@@ -92,6 +93,26 @@ class GOWVR
 {
 private:
     void hook_monitor();
+    std::atomic<uint32_t> m_do_not_hook_d3d_count{0};
+
+public:
+    struct DoNotHook {
+        DoNotHook(std::atomic<uint32_t>& count) : m_count(count) {
+            ++m_count;
+        }
+
+        ~DoNotHook() {
+            --m_count;
+        }
+
+    private:
+        std::atomic<uint32_t>& m_count;
+    };
+
+    DoNotHook acquire_do_not_hook_d3d() {
+        return DoNotHook{m_do_not_hook_d3d_count};
+    }
+
 
 public:
     GOWVR(HMODULE module);
@@ -101,7 +122,7 @@ public:
 
     bool is_valid() const { return m_valid; }
 
-//    bool is_dx11() const { return m_is_d3d11; }
+    bool is_dx11() const { return m_is_d3d11; }
 
     bool is_dx12() const { return m_is_d3d12; }
 
@@ -115,9 +136,9 @@ public:
     bool is_ready() const { return m_initialized && m_game_data_initialized; }
 
     void run_imgui_frame(bool from_present);
-//
-//    void on_frame_d3d11();
-//    void on_post_present_d3d11();
+
+    void on_frame_d3d11();
+    void on_post_present_d3d11();
     void on_frame_d3d12();
     void on_post_present_d3d12();
     void on_reset();
@@ -137,7 +158,9 @@ public:
         return get_persistent_dir() / dir;
     }
 
-    void save_config();
+    void request_save_config() {
+        m_wants_save_config = true;
+    }
 
     enum class RendererType : uint8_t {
         D3D11,
@@ -145,7 +168,7 @@ public:
     };
     
     auto get_renderer_type() const { return m_renderer_type; }
-//    auto& get_d3d11_hookhook() const { return m_d3d11_hook; }
+    auto& get_d3d11_hook() const { return m_d3d11_hook; }
     auto& get_d3d12_hook() const { return m_d3d12_hook; }
 
     auto get_window() const { return m_wnd; }
@@ -186,6 +209,7 @@ public:
     }
 
 private:
+        void save_config();
     void consume_input();
     void update_fonts();
     void invalidate_device_objects();
@@ -193,7 +217,7 @@ private:
     void draw_ui();
     void draw_about();
 
-//    bool hook_d3d11();
+    bool hook_d3d11();
     bool hook_d3d12();
 
     bool initialize();
@@ -210,7 +234,7 @@ private:
     bool m_first_frame{true};
     bool m_first_frame_d3d_initialize{true};
     bool m_is_d3d12{false};
-//    bool m_is_d3d11{false};
+    bool m_is_d3d11{true};
     bool m_valid{false};
     bool m_initialized{false};
     bool m_created_default_cfg{false};
@@ -222,6 +246,7 @@ private:
     // UI
     bool m_has_frame{false};
     bool m_wants_device_object_cleanup{false};
+    bool m_wants_save_config{false};
     bool m_draw_ui{true};
     bool m_last_draw_ui{m_draw_ui};
     bool m_is_ui_focused{false};
@@ -255,7 +280,7 @@ private:
     float m_accumulated_mouse_delta[2]{};
     float m_mouse_delta[2]{};
     std::array<uint8_t, 256> m_last_keys{0};
-//    std::unique_ptr<D3D11Hook> m_d3d11_hook{};
+    std::unique_ptr<D3D11Hook> m_d3d11_hook{};
     std::unique_ptr<D3D12Hook> m_d3d12_hook{};
     std::unique_ptr<WindowsMessageHook> m_windows_message_hook;
     std::unique_ptr<DInputHook> m_dinput_hook;
@@ -298,22 +323,22 @@ private: // D3D12 Init
     void deinit_d3d12();
 
 private: // D3D11 members
-//    struct D3D11 {
-//        ComPtr<ID3D11Texture2D> blank_rt{};
-//		ComPtr<ID3D11Texture2D> rt{};
-//        ComPtr<ID3D11RenderTargetView> blank_rt_rtv{};
-//		ComPtr<ID3D11RenderTargetView> rt_rtv{};
-//		ComPtr<ID3D11ShaderResourceView> rt_srv{};
-//        uint32_t rt_width{};
-//        uint32_t rt_height{};
-//		ComPtr<ID3D11RenderTargetView> bb_rtv{};
-//    } m_d3d11{};
+    struct D3D11 {
+    ComPtr<ID3D11Texture2D> blank_rt{};
+		ComPtr<ID3D11Texture2D> rt{};
+    ComPtr<ID3D11RenderTargetView> blank_rt_rtv{};
+		ComPtr<ID3D11RenderTargetView> rt_rtv{};
+		ComPtr<ID3D11ShaderResourceView> rt_srv{};
+    uint32_t rt_width{};
+    uint32_t rt_height{};
+		ComPtr<ID3D11RenderTargetView> bb_rtv{};
+    } m_d3d11{};
 
 public:
-//    auto& get_blank_rendertarget_d3d11() { return m_d3d11.blank_rt; }
-//    auto& get_rendertarget_d3d11() { return m_d3d11.rt; }
-//    auto get_rendertarget_width_d3d11() const { return m_d3d11.rt_width; }
-//    auto get_rendertarget_height_d3d11() const { return m_d3d11.rt_height; }
+    auto& get_blank_rendertarget_d3d11() { return m_d3d11.blank_rt; }
+    auto& get_rendertarget_d3d11() { return m_d3d11.rt; }
+    auto get_rendertarget_width_d3d11() const { return m_d3d11.rt_width; }
+    auto get_rendertarget_height_d3d11() const { return m_d3d11.rt_height; }
 
 private: // D3D12 members
 #ifdef GOWVR_EXPERIMENTAL
@@ -328,6 +353,13 @@ private: // D3D12 members
             BACKBUFFER_0,
             BACKBUFFER_1,
             BACKBUFFER_2,
+            BACKBUFFER_3,
+            BACKBUFFER_4,
+            BACKBUFFER_5,
+            BACKBUFFER_6,
+            BACKBUFFER_7,
+            BACKBUFFER_8,
+            BACKBUFFER_LAST = BACKBUFFER_8,
             IMGUI,
             BLANK,
             COUNT,
@@ -366,6 +398,7 @@ private: // D3D12 members
         uint32_t rt_height{};
 
         std::array<void*, 2> imgui_backend_datas{};
+        std::unique_ptr<DirectX::DX12::GraphicsMemory> graphics_memory{}; // for use in several places around REF
     } m_d3d12{};
 
 public:

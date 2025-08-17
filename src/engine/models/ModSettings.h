@@ -2,7 +2,7 @@
 
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/vec3.hpp>
-#include <engine/models/GOWRGameState.h>
+#include <engine/models/GOWGameState.h>
 
 namespace ModSettings
 {
@@ -29,7 +29,7 @@ namespace ModSettings
     extern DebugAndCalibration g_debugAndCalibration;
 
     extern CrosshairTranslate g_crosshairTranslate;
-    extern GOWRGameState        g_game_state;
+    extern GOWGameState        g_game_state;
 
 
     struct InternalSettings

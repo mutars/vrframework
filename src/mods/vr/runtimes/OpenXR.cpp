@@ -1469,6 +1469,7 @@ XrResult OpenXR::end_frame() {
     this->begin_profile();
     auto result = xrEndFrame(this->session, &frame_end_info);
     this->end_profile("xrEndFrame");
+
     if (result != XR_SUCCESS) {
         spdlog::error("[VR] xrEndFrame failed: {}", this->get_result_string(result));
     }

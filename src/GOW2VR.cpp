@@ -18,15 +18,16 @@ extern "C" {
 #include "af_baidu.hpp"
 #include "af_faprolight.hpp"
 #include "font_robotomedium.hpp"
+#include "imgui_impl_dx11.h"
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 #include <ImGuizmo.h>
 #include <engine/models/ModSettings.h>
 #include <imgui.h>
 #include <imnodes.h>
-#include <nvidia/MotionVectorReprojection.h>
+//#include <nvidia/MotionVectorReprojection.h>
 #ifdef _DEBUG
-#include <nvidia/ShaderDebugOverlay.h>
+//#include <nvidia/ShaderDebugOverlay.h>
 #endif
 #include "utility/Module.hpp"
 #include "utility/Patch.hpp"
@@ -61,12 +62,14 @@ void GOWVR::hook_monitor() {
 
     const auto now = std::chrono::steady_clock::now();
 
-//    auto& d3d11 = get_d3d11_hook();
+    auto& d3d11 = get_d3d11_hook();
     auto& d3d12 = get_d3d12_hook();
 
     const auto renderer_type = get_renderer_type();
 
-    if (d3d12 == nullptr || (renderer_type == GOWVR::RendererType::D3D12 && d3d12 != nullptr && !d3d12->is_inside_present()))
+    if (d3d11 == nullptr || d3d12 == nullptr 
+        || (renderer_type == GOWVR::RendererType::D3D11 && d3d11 != nullptr && !d3d11->is_inside_present()) 
+        || (renderer_type == GOWVR::RendererType::D3D12 && d3d12 != nullptr && !d3d12->is_inside_present()))
     {
         // check if present time is more than 5 seconds ago
         if (now - m_last_present_time > std::chrono::seconds(5)) {
@@ -83,7 +86,11 @@ void GOWVR::hook_monitor() {
                 spdlog::info("Sending rehook request for D3D");
 
                 // hook_d3d12 always gets called first.
-                hook_d3d12();
+                if (m_is_d3d11) {
+                    hook_d3d11();
+                } else {
+                    hook_d3d12();
+                }
 
                 // so we don't immediately go and hook it again
                 // add some additional time to it to give it some leeway
@@ -253,15 +260,42 @@ GOWVR::GOWVR(HMODULE module)
 }
 
 
+bool GOWVR::hook_d3d11() {
+    m_d3d11_hook.reset();
+    m_d3d11_hook = std::make_unique<D3D11Hook>();
+    m_d3d11_hook->on_present([this](D3D11Hook& hook) { on_frame_d3d11(); });
+    m_d3d11_hook->on_post_present([this](D3D11Hook& hook) { on_post_present_d3d11(); });
+    m_d3d11_hook->on_resize_buffers([this](D3D11Hook& hook) { on_reset(); });
+
+    if (!m_is_d3d12) {
+        if (m_d3d11_hook->hook()) {
+            spdlog::info("Hooked DirectX 11");
+            m_valid = true;
+            m_is_d3d11 = true;
+            return true;
+        }
+
+        if (m_d3d11_hook->unhook()) {
+            spdlog::info("D3D11 Unhooked!");
+        } else {
+            spdlog::info("Cannot unhook D3D11, this might crash.");
+        }
+
+        m_valid = false;
+        m_is_d3d11 = false;
+        return false;
+    }
+    return false;
+}
+
 bool GOWVR::hook_d3d12() {
-    // windows 7?
-//    if (LoadLibraryA("d3d12.dll") == nullptr) {
-//        spdlog::info("d3d12.dll not found, user is probably running Windows 7.");
-//        spdlog::info("Falling back to hooking D3D11.");
-//
-//        m_is_d3d12 = false;
-//        return hook_d3d11();
-//    }
+    if (LoadLibraryA("d3d12.dll") == nullptr) {
+        spdlog::info("d3d12.dll not found, user is probably running Windows 7.");
+        spdlog::info("Falling back to hooking D3D11.");
+
+        m_is_d3d12 = false;
+        return hook_d3d11();
+    }
 
     //if (m_d3d12_hook == nullptr) {
         m_d3d12_hook.reset();
@@ -274,7 +308,7 @@ bool GOWVR::hook_d3d12() {
     //m_d3d12_hook->on_create_swap_chain([this](D3D12Hook& hook) { m_d3d12.command_queue = m_d3d12_hook->get_command_queue(); });
 
     // Making sure D3D11 is not hooked
-//    if (!m_is_d3d11) {
+    if (!m_is_d3d11) {
         if (m_d3d12_hook->hook()) {
             spdlog::info("Hooked DirectX 12");
             m_valid = true;
@@ -292,8 +326,8 @@ bool GOWVR::hook_d3d12() {
         m_is_d3d12 = false;
 
         // Try to hook d3d11 instead
-//        return hook_d3d11();
-//    }
+        return hook_d3d11();
+    }
 
     return false;
 }
@@ -309,9 +343,9 @@ GOWVR::~GOWVR() {
 
     m_d3d_monitor_thread.reset();
 
-//    if (m_is_d3d11) {
-//        deinit_d3d11();
-//    }
+    if (m_is_d3d11) {
+        deinit_d3d11();
+    }
 
     if (m_is_d3d12) {
         deinit_d3d12();
@@ -362,6 +396,114 @@ void GOWVR::run_imgui_frame(bool from_present) {
     ImGui::Render();
 
     m_has_frame = true;
+
+    if (!from_present && m_wants_save_config) {
+        save_config();
+        m_wants_save_config = false;
+    }
+}
+
+void GOWVR::on_frame_d3d11() {
+    std::scoped_lock _{ m_imgui_mtx };
+
+    // spdlog::debug("on_frame (D3D11)");
+
+    m_renderer_type = RendererType::D3D11;
+
+    if (!m_initialized) {
+        if (!initialize()) {
+            return;
+        }
+
+        spdlog::info("REFramework initialized");
+        m_initialized = true;
+        return;
+    }
+
+    if (m_message_hook_requested) {
+        initialize_windows_message_hook();
+    }
+
+    auto device = m_d3d11_hook->get_device();
+
+    if (device == nullptr) {
+        spdlog::error("D3D11 device was null when it shouldn't be, returning...");
+        m_initialized = false;
+        return;
+    }
+
+    bool is_init_ok = m_error.empty() && m_game_data_initialized;
+
+    if (is_init_ok) {
+        // Write default config once if it doesn't exist.
+        if (!std::exchange(m_created_default_cfg, true)) {
+            if (!fs::exists({utility::widen(get_persistent_dir("gowvr_config.txt").string())})) {
+                save_config();
+            }
+        }
+    }
+
+    is_init_ok = first_frame_initialize();
+
+    if (!m_has_frame) {
+        if (!is_init_ok) {
+            update_fonts();
+            invalidate_device_objects();
+
+            ImGui_ImplDX11_NewFrame();
+            // hooks don't run until after initialization, so we just render the imgui window while initalizing.
+            run_imgui_frame(true);
+        } else {
+            return;
+        }
+    } else {
+        invalidate_device_objects();
+        ImGui_ImplDX11_NewFrame();
+    }
+
+    if (is_init_ok) {
+        m_mods->on_present();
+    }
+
+    ComPtr<ID3D11DeviceContext> context{};
+    float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
+
+    m_d3d11_hook->get_device()->GetImmediateContext(&context);
+    context->ClearRenderTargetView(m_d3d11.blank_rt_rtv.Get(), clear_color);
+
+    // Only render this if VR is running.
+    // TODO: Instead use this as an SRV to render to the back buffer so we don't render twice.
+    if (VR::get()->is_hmd_active()) {
+        context->ClearRenderTargetView(m_d3d11.rt_rtv.Get(), clear_color);
+        context->OMSetRenderTargets(1, m_d3d11.rt_rtv.GetAddressOf(), NULL);
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    }
+
+    // Set the back buffer to be the render target.
+    context->OMSetRenderTargets(1, m_d3d11.bb_rtv.GetAddressOf(), nullptr);
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+    if (is_init_ok) {
+        m_mods->on_post_frame();
+    }
+}
+
+void GOWVR::on_post_present_d3d11() {
+    if (!m_error.empty() || !m_initialized || !m_game_data_initialized) {
+        if (m_last_present_time <= std::chrono::steady_clock::now()){
+            m_last_present_time = std::chrono::steady_clock::now();
+        }
+
+        return;
+    }
+
+    for (auto& mod : m_mods->get_mods()) {
+        mod->on_post_present();
+    }
+
+    if (m_last_present_time <= std::chrono::steady_clock::now()){
+        m_last_present_time = std::chrono::steady_clock::now();
+    }
 }
 
 // D3D12 Draw funciton
@@ -390,7 +532,6 @@ void GOWVR::on_frame_d3d12() {
 
     if (m_message_hook_requested) {
         initialize_windows_message_hook();
-//        initialize_xinput_hook();
     }
 
     auto device = m_d3d12_hook->get_device();
@@ -485,7 +626,7 @@ void GOWVR::on_frame_d3d12() {
 
     }
 #endif
-#ifdef _DEBUG
+#ifdef defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
     if(!m_d3d12.cmd_ctxs.empty() && ModSettings::g_internalSettings.debugShaders){
         auto& cmd_ctx = m_d3d12.cmd_ctxs[m_d3d12.cmd_ctx_index++ % m_d3d12.cmd_ctxs.size()];
         if(cmd_ctx != nullptr) {
@@ -521,8 +662,19 @@ void GOWVR::on_frame_d3d12() {
         return;
     }
 
-    //TODO this is IMGUI code, we need to replace it with our own code
-    // imgui pipeline might be wrong
+    auto swapchain = m_d3d12_hook->get_swap_chain();
+    const auto bb_index = swapchain->GetCurrentBackBufferIndex();
+
+    // Test if our RT for this index is valid.
+    if (m_d3d12.get_rt((D3D12::RTV)bb_index) == nullptr) {
+        spdlog::error("RTV for index {} is null, reinitializing...", bb_index);
+        deinit_d3d12();
+        m_has_frame = false;
+        m_first_initialize = false;
+        m_initialized = false;
+        return;
+    }
+
     cmd_ctx->wait(INFINITE);
     {
         std::scoped_lock _{ cmd_ctx->mtx };
@@ -532,29 +684,33 @@ void GOWVR::on_frame_d3d12() {
         D3D12_RESOURCE_BARRIER barrier{};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource = m_d3d12.get_rt(D3D12::RTV::IMGUI).Get();
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        cmd_ctx->cmd_list->ResourceBarrier(1, &barrier);
 
-        float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
         D3D12_CPU_DESCRIPTOR_HANDLE rts[1]{};
-        cmd_ctx->cmd_list->ClearRenderTargetView(m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI), clear_color, 0, nullptr);
-        rts[0] = m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI);
-        cmd_ctx->cmd_list->OMSetRenderTargets(1, rts, FALSE, NULL);
-        cmd_ctx->cmd_list->SetDescriptorHeaps(1, m_d3d12.srv_desc_heap.GetAddressOf());
 
-        ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
-        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_ctx->cmd_list.Get());
+        // Only render this if VR is running.
+        // TODO: Instead use this as an SRV to render to the back buffer so we don't render twice.
+        if (VR::get()->is_hmd_active()) {
+            barrier.Transition.pResource = m_d3d12.get_rt(D3D12::RTV::IMGUI).Get();
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            cmd_ctx->cmd_list->ResourceBarrier(1, &barrier);
 
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        cmd_ctx->cmd_list->ResourceBarrier(1, &barrier);
+            float clear_color[]{0.0f, 0.0f, 0.0f, 0.0f};
+            cmd_ctx->cmd_list->ClearRenderTargetView(m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI), clear_color, 0, nullptr);
+            rts[0] = m_d3d12.get_cpu_rtv(device, D3D12::RTV::IMGUI);
+            cmd_ctx->cmd_list->OMSetRenderTargets(1, rts, FALSE, NULL);
+            cmd_ctx->cmd_list->SetDescriptorHeaps(1, m_d3d12.srv_desc_heap.GetAddressOf());
+
+            ImGui::GetIO().BackendRendererUserData = m_d3d12.imgui_backend_datas[1];
+            ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_ctx->cmd_list.Get());
+
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            cmd_ctx->cmd_list->ResourceBarrier(1, &barrier);
+        }
 
         // Draw to the back buffer.
-        auto swapchain = m_d3d12_hook->get_swap_chain();
-        auto bb_index = swapchain->GetCurrentBackBufferIndex();
         barrier.Transition.pResource = m_d3d12.rts[bb_index].Get();
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -586,7 +742,14 @@ void GOWVR::on_post_present_d3d12() {
 
         return;
     }
-    
+
+    if (m_d3d12.graphics_memory != nullptr) {
+        auto& hook = get_d3d12_hook();
+        auto command_queue = hook->get_command_queue();
+
+        m_d3d12.graphics_memory->Commit(command_queue);
+    }
+
     for (auto& mod : m_mods->get_mods()) {
         mod->on_post_present();
     }
@@ -603,13 +766,13 @@ void GOWVR::on_reset() {
 
     if (m_initialized) {
         // fixes text boxes not being able to receive input
-        imgui::reset_keystates();
+        //imgui::reset_keystates();
     }
 
     // Crashes if we don't release it at this point.
-//    if (m_is_d3d11) {
-//        deinit_d3d11();
-//    }
+    if (m_is_d3d11) {
+        deinit_d3d11();
+    }
 
     if (m_is_d3d12) {
         deinit_d3d12();
@@ -854,6 +1017,8 @@ std::filesystem::path GOWVR::get_persistent_dir() {
 void GOWVR::save_config() {
     std::scoped_lock _{m_config_mtx};
 
+    m_wants_save_config = false;
+
     spdlog::info("Saving config gowvr_config.txt");
 
     utility::Config cfg{};
@@ -965,7 +1130,11 @@ void GOWVR::invalidate_device_objects() {
         return;
     }
 
-    ImGui_ImplDX12_InvalidateDeviceObjects();
+    if (m_renderer_type == RendererType::D3D11) {
+        ImGui_ImplDX11_InvalidateDeviceObjects();
+    } else if (m_renderer_type == RendererType::D3D12) {
+        ImGui_ImplDX12_InvalidateDeviceObjects();
+    }
 
     m_wants_device_object_cleanup = false;
 }
@@ -1015,7 +1184,7 @@ void GOWVR::draw_ui() {
     auto& io = ImGui::GetIO();
 
     if (io.WantCaptureKeyboard) {
-        //m_dinput_hook->ignore_input();
+        m_dinput_hook->ignore_input();
     } else {
         m_dinput_hook->acknowledge_input();
     }
@@ -1248,7 +1417,75 @@ bool GOWVR::initialize() {
         return false;
     }
 
-    if (m_is_d3d12) {
+    if (m_is_d3d11) {
+        spdlog::info("Attempting to initialize DirectX 11");
+
+        if (!m_d3d11_hook->is_hooked()) {
+            return false;
+        }
+
+        auto device = m_d3d11_hook->get_device();
+        auto swap_chain = m_d3d11_hook->get_swap_chain();
+
+        // Wait.
+        if (device == nullptr || swap_chain == nullptr) {
+            m_first_initialize = true;
+
+            spdlog::info("Device or SwapChain null. DirectX 12 may be in use. Unhooking D3D11...");
+
+            // We unhook D3D11
+            if (m_d3d11_hook->unhook()) {
+                spdlog::info("D3D11 unhooked!");
+            } else {
+                spdlog::error("Cannot unhook D3D11, this might crash.");
+            }
+
+            m_is_d3d11 = false;
+            m_valid = false;
+
+            // We hook D3D12
+            if (!hook_d3d12()) {
+                spdlog::error("Failed to hook D3D12 after unhooking D3D11.");
+            }
+            return false;
+        }
+
+        ID3D11DeviceContext* context = nullptr;
+        device->GetImmediateContext(&context);
+
+        DXGI_SWAP_CHAIN_DESC swap_desc{};
+        swap_chain->GetDesc(&swap_desc);
+
+        m_wnd = swap_desc.OutputWindow;
+
+
+        spdlog::info("Window Handle: {0:x}", (uintptr_t)m_wnd);
+        spdlog::info("Initializing ImGui");
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
+        ImNodes::CreateContext();
+
+        set_imgui_style();
+
+        static const auto imgui_ini = (get_persistent_dir() / "ref_ui.ini").string();
+        ImGui::GetIO().IniFilename = imgui_ini.c_str();
+
+        spdlog::info("Initializing ImGui Win32");
+
+        if (!ImGui_ImplWin32_Init(m_wnd)) {
+            spdlog::error("Failed to initialize ImGui.");
+            return false;
+        }
+
+        spdlog::info("Creating render target");
+
+        if (!init_d3d11()) {
+            spdlog::error("Failed to init D3D11");
+            return false;
+        }
+    } else if (m_is_d3d12) {
         spdlog::info("Attempting to initialize DirectX 12");
 
         if (!m_d3d12_hook->is_hooked()) {
@@ -1276,9 +1513,9 @@ bool GOWVR::initialize() {
             m_is_d3d12 = false;
 
             // We hook D3D11
-//            if (!hook_d3d11()) {
-//                spdlog::error("Failed to hook D3D11 after unhooking D3D12.");
-//            }
+            if (!hook_d3d11()) {
+                spdlog::error("Failed to hook D3D11 after unhooking D3D12.");
+            }
             return false;
         }
 
@@ -1411,6 +1648,7 @@ bool GOWVR::initialize_windows_message_hook() {
         m_windows_message_hook->on_message = [this](auto wnd, auto msg, auto w_param, auto l_param) {
             return on_message(wnd, msg, w_param, l_param);
         };
+
         m_message_hook_requested = false;
         return true;
     }
@@ -1465,12 +1703,116 @@ void GOWVR::call_on_frame() {
     }
 }
 
+// DirectX 11 Initialization methods
+
+bool GOWVR::init_d3d11() {
+    deinit_d3d11();
+
+    auto swapchain = m_d3d11_hook->get_swap_chain();
+    auto device = m_d3d11_hook->get_device();
+
+    // Get back buffer.
+    spdlog::info("[D3D11] Creating RTV of back buffer...");
+
+    ComPtr<ID3D11Texture2D> backbuffer{};
+
+    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) {
+        spdlog::error("[D3D11] Failed to get back buffer!");
+        return false;
+    }
+
+    // Create a render target view of the back buffer.
+    if (FAILED(device->CreateRenderTargetView(backbuffer.Get(), nullptr, &m_d3d11.bb_rtv))) {
+        spdlog::error("[D3D11] Failed to create back buffer render target view!");
+        return false;
+    }
+
+    // Get backbuffer description.
+    D3D11_TEXTURE2D_DESC backbuffer_desc{};
+
+    backbuffer->GetDesc(&backbuffer_desc);
+    backbuffer_desc.BindFlags |= D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+    spdlog::info("[D3D11] Back buffer format is {}", backbuffer_desc.Format);
+
+    // Create our blank render target.
+    spdlog::info("[D3D11] Creating render targets...");
+    {
+        // Create our blank render target.
+        auto d3d11_rt_desc = backbuffer_desc;
+        d3d11_rt_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // For VR
+
+        if (FAILED(device->CreateTexture2D(&d3d11_rt_desc, nullptr, &m_d3d11.blank_rt))) {
+            spdlog::error("[D3D11] Failed to create render target texture!");
+            return false;
+        }
+
+        // Create our render target
+        if (FAILED(device->CreateTexture2D(&d3d11_rt_desc, nullptr, &m_d3d11.rt))) {
+            spdlog::error("[D3D11] Failed to create render target texture!");
+            return false;
+        }
+    }
+
+    // Create our blank render target view.
+    spdlog::info("[D3D11] Creating rtvs...");
+
+    if (FAILED(device->CreateRenderTargetView(m_d3d11.blank_rt.Get(), nullptr, &m_d3d11.blank_rt_rtv))) {
+        spdlog::error("[D3D11] Failed to create render terget view!");
+        return false;
+    }
+
+
+    // Create our render target view.
+    if (FAILED(device->CreateRenderTargetView(m_d3d11.rt.Get(), nullptr, &m_d3d11.rt_rtv))) {
+        spdlog::error("[D3D11] Failed to create render terget view!");
+        return false;
+    }
+
+    // Create our render target shader resource view.
+    spdlog::info("[D3D11] Creating srvs...");
+
+    if (FAILED(device->CreateShaderResourceView(m_d3d11.rt.Get(), nullptr, &m_d3d11.rt_srv))) {
+        spdlog::error("[D3D11] Failed to create shader resource view!");
+        return false;
+    }
+
+    m_d3d11.rt_width = backbuffer_desc.Width;
+    m_d3d11.rt_height = backbuffer_desc.Height;
+
+    spdlog::info("[D3D11] Initializing ImGui D3D11...");
+
+    ComPtr<ID3D11DeviceContext> context{};
+
+    device->GetImmediateContext(&context);
+
+    if (!ImGui_ImplDX11_Init(device, context.Get())) {
+        spdlog::error("[D3D11] Failed to initialize ImGui.");
+        return false;
+    }
+
+    return true;
+}
+
+void GOWVR::deinit_d3d11() {
+    if(m_d3d11.rt) {
+        ImGui_ImplDX11_Shutdown();
+    }
+    m_d3d11 = {};
+}
+
 // DirectX 12 Initialization methods
 
 bool GOWVR::init_d3d12() {
     deinit_d3d12();
     
     auto device = m_d3d12_hook->get_device();
+
+    spdlog::info("[D3D12] Creating DXTK graphics memory...");
+
+    // Realistically we only have one device. If not, then... IDK
+    m_d3d12.graphics_memory.reset();
+    m_d3d12.graphics_memory = std::make_unique<DirectX::DX12::GraphicsMemory>(device);
 
     spdlog::info("[D3D12] Creating command allocator...");
 
@@ -1522,20 +1864,41 @@ bool GOWVR::init_d3d12() {
 
     spdlog::info("[D3D12] Creating render targets...");
 
+    auto swapchain = m_d3d12_hook->get_swap_chain();
+
+    DXGI_SWAP_CHAIN_DESC swapchain_desc{};
+
+    if (FAILED(swapchain->GetDesc(&swapchain_desc))) {
+        spdlog::error("[D3D12] Failed to get swap chain description.");
+        return false;
+    }
+
+    spdlog::info("[D3D12] Swapchain buffer count: {}", swapchain_desc.BufferCount);
+
     {
         // Create back buffer rtvs.
-        auto swapchain = m_d3d12_hook->get_swap_chain();
+        if (swapchain_desc.BufferCount > (int)D3D12::RTV::BACKBUFFER_LAST + 1) {
+            spdlog::warn("[D3D12] Too many back buffers ({} vs {}).", swapchain_desc.BufferCount, (int)D3D12::RTV::BACKBUFFER_LAST + 1);
+        }
 
-        for (auto i = 0; i <= (int)D3D12::RTV::BACKBUFFER_2; ++i) {
+        for (auto i = 0; i < (int)swapchain_desc.BufferCount; ++i) {
             if (SUCCEEDED(swapchain->GetBuffer(i, IID_PPV_ARGS(&m_d3d12.rts[i])))) {
                 device->CreateRenderTargetView(m_d3d12.rts[i].Get(), nullptr, m_d3d12.get_cpu_rtv(device, (D3D12::RTV)i));
             } else {
-                spdlog::error("[D3D12] Failed to get back buffer for rtv. {}", i);
+                spdlog::error("[D3D12] Failed to get back buffer for rtv {}", i);
+                m_d3d12.rts[i].Reset(); // just in case
             }
         }
 
         // Create our imgui and blank rts.
         auto& backbuffer = m_d3d12.get_rt(D3D12::RTV::BACKBUFFER_0);
+
+        if (backbuffer == nullptr) {
+            spdlog::error("[D3D12] Failed to get first back buffer RTV.");
+            deinit_d3d12();
+            return false;
+        }
+
         auto desc = backbuffer->GetDesc();
 
         spdlog::info("[D3D12] Back buffer format is {}", desc.Format);
@@ -1583,7 +1946,7 @@ bool GOWVR::init_d3d12() {
     auto& bb = m_d3d12.get_rt(D3D12::RTV::BACKBUFFER_0);
     auto bb_desc = bb->GetDesc();
 
-    if (!ImGui_ImplDX12_Init(device, 3, bb_desc.Format, m_d3d12.srv_desc_heap.Get(),
+    if (!ImGui_ImplDX12_Init(device, swapchain_desc.BufferCount, bb_desc.Format, m_d3d12.srv_desc_heap.Get(),
             m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI_FONT_BACKBUFFER), m_d3d12.get_gpu_srv(device, D3D12::SRV::IMGUI_FONT_BACKBUFFER))) {
         spdlog::error("[D3D12] Failed to initialize ImGui.");
         return false;
@@ -1597,16 +1960,16 @@ bool GOWVR::init_d3d12() {
     auto& bb_vr = m_d3d12.get_rt(D3D12::RTV::IMGUI);
     auto bb_vr_desc = bb_vr->GetDesc();
 
-    if (!ImGui_ImplDX12_Init(device, 3, bb_vr_desc.Format, m_d3d12.srv_desc_heap.Get(),
+    if (!ImGui_ImplDX12_Init(device, swapchain_desc.BufferCount, bb_vr_desc.Format, m_d3d12.srv_desc_heap.Get(),
             m_d3d12.get_cpu_srv(device, D3D12::SRV::IMGUI_FONT_VR), m_d3d12.get_gpu_srv(device, D3D12::SRV::IMGUI_FONT_VR))) {
         spdlog::error("[D3D12] Failed to initialize ImGui.");
         return false;
     }
 
     m_d3d12.imgui_backend_datas[1] = ImGui::GetIO().BackendRendererUserData;
-    static auto nv_mv = MotionVectorReprojection::Get();
-    nv_mv->setup(device, bb_desc);
-#ifdef _DEBUG
+//    static auto nv_mv = MotionVectorReprojection::Get();
+//    nv_mv->setup(device, bb_desc);
+#if defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
     static auto sl_debug = ShaderDebugOverlay::Get();
     sl_debug->setup(device, bb_desc);
 #endif
@@ -1620,12 +1983,12 @@ void GOWVR::deinit_d3d12() {
         }
     }
 
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
     static auto sl_debug = ShaderDebugOverlay::Get();
     sl_debug->Reset();
 #endif
-    static auto nv_mv = MotionVectorReprojection::Get();
-    nv_mv->Reset();
+//    static auto nv_mv = MotionVectorReprojection::Get();
+//    nv_mv->Reset();
 
     m_d3d12.cmd_ctxs.clear();
 

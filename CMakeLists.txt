@@ -93,6 +93,7 @@ target_link_libraries("${PROJECT_NAME}" PUBLIC
         kananlib
         openxr_loader
         delayimp
+        DirectXTK
         DirectXTK12
         "${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/lib/win64/openvr_api.lib"
 )
@@ -251,7 +252,7 @@ add_custom_command(
         TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND
-       ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> "C:\\EpicGames\\GodofWar\\$<TARGET_FILE_NAME:${PROJECT_NAME}>"
+       ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> "C:\\Program Files (x86)\\Steam\\steamapps\\common\\GodOfWar\\$<TARGET_FILE_NAME:${PROJECT_NAME}>"
 )
 
 

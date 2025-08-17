@@ -162,6 +162,8 @@ std::optional<std::string> VR::initialize_openvr() {
 
     if (g_framework->is_dx12()) {
         m_d3d12.on_reset(this);
+    } else {
+        m_d3d11.on_reset(this);
     }
 
     m_openvr->needs_pose_update = true;
@@ -278,6 +280,8 @@ std::optional<std::string> VR::initialize_openxr() {
 
     if (g_framework->is_dx12()) {
         m_d3d12.on_reset(this);
+    } else {
+        m_d3d11.on_reset(this);
     }
 
     m_openxr->needs_pose_update = true;
@@ -347,6 +351,8 @@ std::optional<std::string> VR::initialize_openxr() {
 
     if (g_framework->is_dx12()) {
         m_d3d12.openxr().initialize(session_create_info);
+    } else {
+        m_d3d11.openxr().initialize(session_create_info);
     }
 
     spdlog::info("[VR] Creating OpenXR session");
@@ -494,6 +500,15 @@ std::optional<std::string> VR::initialize_openxr_swapchains() {
             m_openxr->loaded = false;
             spdlog::error("[VR] {}", m_openxr->error.value());
 
+            return m_openxr->error;
+        }
+    } else {
+        auto err = m_d3d11.openxr().create_swapchains();
+
+        if (err) {
+            m_openxr->error = err.value();
+            m_openxr->loaded = false;
+            spdlog::error("[VR] {}", m_openxr->error.value());
             return m_openxr->error;
         }
     }
@@ -915,7 +930,16 @@ void VR::on_present() {
         }
     }
 
-    if (renderer == GOWVR::RendererType::D3D12) {
+    if (renderer == GOWVR::RendererType::D3D11) {
+        // if we don't do this then D3D11 OpenXR freezes for some reason.
+        if (!runtime->got_first_sync) {
+            runtime->synchronize_frame();
+            runtime->update_poses();
+        }
+
+        m_is_d3d12 = false;
+        e = m_d3d11.on_frame(this);
+    } else if (renderer == GOWVR::RendererType::D3D12) {
         m_is_d3d12 = true;
 //        spdlog::info("Copying frame to D3D12 texture f={}", m_presenter_frame_count % 2 == m_left_eye_interval ? "left" : "right");
         e = m_d3d12.on_frame(this);
@@ -1499,6 +1523,10 @@ void VR::on_device_reset() {
 
     spdlog::info("VR: on_device_reset");
     m_backbuffer_inconsistency = false;
+    if (g_framework->is_dx11()) {
+        m_d3d11.on_reset(this);
+    }
+
     if (g_framework->is_dx12()) {
         m_d3d12.on_reset(this);
     }
