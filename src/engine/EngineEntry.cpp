@@ -1,7 +1,7 @@
 #include "EngineEntry.h"
 #include "EngineCameraModule.h"
 #include "EngineRendererModule.h"
-#include "UIComponent.h"
+#include "EngineTwicks.h"
 #include "models/GOWGameState.h"
 #include <engine/models/ModSettings.h>
 #include <engine/models/StatefullData.h>
@@ -9,8 +9,8 @@
 
 std::optional<std::string> EngineEntry::on_initialize()
 {
+    EngineTwicks::DisableBadEffects();
     EngineRendererModule::Get()->InstallHooks();
-//    UIComponent::Get()->InstallHooks();
     EngineCameraModule::Get()->InstallHooks();
 //    UpscalerAfrNvidiaModule::Get();
     return Mod::on_initialize();

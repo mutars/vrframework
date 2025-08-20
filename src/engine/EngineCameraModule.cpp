@@ -1,5 +1,5 @@
 #include "EngineCameraModule.h"
-#include "engine/memory/offsets.h"
+#include "engine/memory/memory_mul.h"
 #include <engine/models/ModSettings.h>
 #include <mods/VR.hpp>
 #include <safetyhook/easy.hpp>
@@ -8,13 +8,13 @@ void EngineCameraModule::InstallHooks()
 {
     spdlog::info("Installing EngineCameraModule hooks");
 
-    auto onCalcProjectionFN = (uintptr_t)memory::mod + 0x4e74c0;
+    auto onCalcProjectionFN = (uintptr_t)memory::g_mod + 0x4e74c0;
     m_onCalcProjection      = safetyhook::create_inline((void*)onCalcProjectionFN, (void*)&EngineCameraModule::onCalcProjection);
     if (!m_onCalcProjection) {
         spdlog::error("Failed to hook m_onCalcProjection");
     }
 
-    auto calcFinalViewFn{ (uintptr_t)memory::mod + 0x4c25a0 };
+    auto calcFinalViewFn{ (uintptr_t)memory::g_mod + 0x4c25a0 };
     m_onCalcFinalView = safetyhook::create_inline((void*)calcFinalViewFn, (void*)&EngineCameraModule::onCalcFinalView);
     if (!m_onCalcFinalView) {
         spdlog::error("Failed to hook m_onCalcFinalView");

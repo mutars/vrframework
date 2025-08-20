@@ -250,7 +250,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             context->RSSetScissorRects(1, &scissor_rect);
 
             m_toneMap->SetOperator(DirectX::ToneMapPostProcess::ACESFilmic);
-            m_toneMap->SetExposure(-1.0f);
+            m_toneMap->SetExposure(-.5f);
             m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
             m_toneMap->Process(context.Get());
         } else if (m_backbuffer_is_8bit) {
@@ -299,7 +299,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             context->RSSetScissorRects(1, &scissor_rect);
 
             m_toneMap->SetOperator(DirectX::ToneMapPostProcess::ACESFilmic);
-            m_toneMap->SetExposure(-1.0f);
+            m_toneMap->SetExposure(-.5f);
             m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
             m_toneMap->Process(context.Get());
         }

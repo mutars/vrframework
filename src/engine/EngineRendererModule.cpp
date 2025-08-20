@@ -4,87 +4,20 @@
 
 #include "EngineRendererModule.h"
 #include "EngineEntry.h"
-#include "REL/Relocation.h"
-#include "engine/memory/offsets.h"
-#include <engine/models/ModSettings.h>
+#include "engine/memory/memory_mul.h"
 #include <mods/VR.hpp>
 #include <safetyhook/easy.hpp>
-
-std::vector<uint8_t> GenerateAspectRatioPatchBytes() {
-    // --- The Assembly We Want ---
-    // movaps xmm6, xmm3   ; Move the correct aspect ratio (v43 in xmm3)
-    //                     ; into the target aspect ratio register (v24 in xmm6).
-    //
-    // --- Bytecode for this instruction ---
-    // 0F 28 F3
-
-    std::vector<uint8_t> patchBytes = { 0x0F, 0x28, 0xF3 };
-
-    // --- Calculate Padding ---
-    // The original code block we are replacing starts at RVA 0x991695
-    // and ends just before RVA 0x9916CB.
-    // Total size = 0x9916CB - 0x991695 = 0x36 bytes (54 bytes).
-    // Our patch is 3 bytes long.
-    // We need to fill the remaining space with NOPs.
-    const size_t originalCodeSize = 54;
-    const size_t patchSize = patchBytes.size();
-    const size_t nopCount = originalCodeSize - patchSize;
-
-    // A NOP (No-Operation) instruction is 0x90 in x86-64.
-    for (size_t i = 0; i < nopCount; ++i) {
-        patchBytes.push_back(0x90);
-    }
-
-    return patchBytes;
-}
-
-bool PatchMemory(uintptr_t address, const std::vector<uint8_t>& patchBytes) {
-    if (patchBytes.empty()) {
-        return false;
-    }
-
-    DWORD oldProtect;
-    if (!VirtualProtect((LPVOID)address, patchBytes.size(), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-        return false;
-    }
-
-    memcpy((LPVOID)address, patchBytes.data(), patchBytes.size());
-    DWORD tempProtect;
-    VirtualProtect((LPVOID)address, patchBytes.size(), oldProtect, &tempProtect);
-
-    return true;
-}
-
-void DisableLetterBox() {
-    //TODO move to memory
-    uintptr_t patchAddress = (uintptr_t)memory::mod + 0x991695;
-
-    // Generate the bytecode for our patch.
-    std::vector<uint8_t> patch = GenerateAspectRatioPatchBytes();
-
-    spdlog::info("Target address: 0x{:x}", patchAddress);
-    spdlog::info("Patch size: {} bytes.", patch.size());
-
-    // Apply the patch to memory.
-    if (PatchMemory(patchAddress, patch)) {
-        spdlog::info("Success! Aspect ratio clamp has been patched.");
-    } else {
-        spdlog::error("Failed to write patch to memory. GetLastError() = {}", GetLastError());
-    }
-}
 
 void EngineRendererModule::InstallHooks()
 {
     spdlog::info("Installing EngineRendererModule hooks");
-    DisableLetterBox();
-
-    auto worldTickFunct = (uintptr_t) memory::mod + 0x406820;
+    auto worldTickFunct = (uintptr_t) memory::g_mod + 0x406820;
     m_worldTickHook = safetyhook::create_inline((void*)worldTickFunct, (void*)&EngineRendererModule::onWorldTick);
     if(!m_worldTickHook) {
         spdlog::error("Failed to hook world tick");
     }
 
-    auto checkResolutionFunct = (uintptr_t) memory::mod + 0x98fbe0;
+    auto checkResolutionFunct = (uintptr_t) memory::g_mod + 0x98fbe0;
     m_checkResolutionHook = safetyhook::create_inline((void*)checkResolutionFunct, (void*)&EngineRendererModule::checkResolution);
     if(!m_checkResolutionHook) {
         spdlog::error("Failed to hook check resolution");
@@ -106,8 +39,8 @@ bool EngineRendererModule::checkResolution(int* outFlags, int maxMessagesToProce
     static auto instance = Get();
     static auto vr = VR::get();
     //TODO move to offsets
-    static auto pRenderW = (int*)((uintptr_t)memory::mod + 0x504c398);
-    static auto pRenderH = (int*)((uintptr_t)memory::mod + 0x504c39c);
+    static auto pRenderW = (int*)((uintptr_t)memory::g_mod + 0x504c398);
+    static auto pRenderH = (int*)((uintptr_t)memory::g_mod + 0x504c39c);
     int oldRenderW = *pRenderW;
     int oldRenderH = *pRenderH;
     auto resp = instance->m_checkResolutionHook.call<bool>(outFlags, maxMessagesToProcess, filterSpecialMessages);

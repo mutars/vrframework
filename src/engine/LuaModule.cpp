@@ -1,12 +1,13 @@
 #include "LuaModule.h"
-#include "engine/memory/offsets.h"
+#include "engine/memory/memory_mul.h"
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <mods/VR.hpp>
 #include <safetyhook/easy.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
-#include <filesystem>
-#include <fstream>
 #include <string>
-#include <algorithm>
+#include <utility/Module.hpp>
 
 void SetupLogging() {
     try {

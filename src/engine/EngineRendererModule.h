@@ -1,6 +1,6 @@
 #pragma once
 
-#include <engine/memory/offsets.h>
+#include <engine/memory/memory_mul.h>
 #include <safetyhook/inline_hook.hpp>
 #include <utility/PointerHook.hpp>
 #include <utils/FunctionHook.h>
