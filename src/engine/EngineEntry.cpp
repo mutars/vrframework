@@ -9,9 +9,9 @@
 
 std::optional<std::string> EngineEntry::on_initialize()
 {
-//    EngineRendererModule::Get()->InstallHooks();
+    EngineRendererModule::Get()->InstallHooks();
 //    UIComponent::Get()->InstallHooks();
-//    EngineCameraModule::Get()->InstallHooks();
+    EngineCameraModule::Get()->InstallHooks();
 //    UpscalerAfrNvidiaModule::Get();
     return Mod::on_initialize();
 }

@@ -3,6 +3,7 @@
 #include <functional>
 
 #include <d3d11.h>
+#include <d3d11_4.h>
 #include <dxgi.h>
 #include <wrl.h>
 
@@ -10,6 +11,7 @@
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi")
+#pragma comment(lib, "dxguid.lib") // for IID_ID3D11Multithread
 
 class D3D11Hook {
 public:
@@ -62,6 +64,12 @@ protected:
     OnPresentFn m_on_post_present{ nullptr };
     OnResizeBuffersFn m_on_resize_buffers{ nullptr };
     ComPtr<ID3D11Texture2D> m_last_depthstencil_used{};
+
+    // New: multithread protection support
+    ComPtr<ID3D11Multithread> m_multithread{};
+    bool m_multithread_protection_set{ false };
+    bool m_enable_multithread_protection{ true };
+    void ensure_multithread_protection();
 
     static HRESULT WINAPI present(IDXGISwapChain* swap_chain, UINT sync_interval, UINT flags);
     static HRESULT WINAPI resize_buffers(IDXGISwapChain* swap_chain, UINT buffer_count, UINT width, UINT height, DXGI_FORMAT new_format, UINT swap_chain_flags);

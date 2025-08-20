@@ -92,7 +92,13 @@ public:
     void on_end_rendering(void* entry);
 //    void on_pre_wait_rendering(void* entry);
     void on_wait_rendering(void* entry);
-    const auto get_backbuffer_size() const { return m_d3d12.get_backbuffer_size(); }
+    auto get_backbuffer_size() const {
+        if( m_is_d3d12) {
+            return m_d3d12.get_backbuffer_size();
+        } else {
+            return m_d3d11.get_backbuffer_size();
+        }
+    }
 
     //unsigned long frame_count_temp{0};
     float separation_ipd{0.068f};

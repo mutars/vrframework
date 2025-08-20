@@ -269,15 +269,6 @@ std::optional<std::string> VR::initialize_openxr() {
 
     spdlog::info("[VR] Initializing OpenXR");
 
-    if (utility::load_module_from_current_directory(L"openxr_loader.dll") == nullptr) {
-        spdlog::info("[VR] Could not load openxr_loader.dll");
-
-        m_openxr->loaded = false;
-        m_openxr->error = "Could not load openxr_loader.dll";
-
-        return std::nullopt;
-    }
-
     if (g_framework->is_dx12()) {
         m_d3d12.on_reset(this);
     } else {
@@ -856,8 +847,7 @@ VRRuntime::Eye VR::get_current_render_eye() const {
 }
 
 void VR::on_present() {
-//    m_presenter_frame_count = m_engine_frame_count;
-
+    m_presenter_frame_count = m_render_frame_count;
     utility::ScopeGuard _guard {[&]() {
         if (!is_using_afr() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
@@ -1024,6 +1014,7 @@ void VR::on_engine_tick(void* entry) {
     if (!runtime->loaded) {
         return;
     }
+    m_engine_frame_count++;
 
     if ((m_engine_frame_count) % 2 == m_left_eye_interval) {
         update_hmd_state();
@@ -1038,6 +1029,7 @@ void VR::on_begin_rendering(void* entry) {
         return;
     }
     m_in_render = true;
+    m_render_frame_count = m_engine_frame_count;
 //    on_wait_rendering(entry);
     //    m_engine_frame_count++;
     if ((m_render_frame_count)% 2 == m_left_eye_interval) {

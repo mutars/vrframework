@@ -1795,7 +1795,8 @@ bool GOWVR::init_d3d11() {
 }
 
 void GOWVR::deinit_d3d11() {
-    if(m_d3d11.rt) {
+    auto bd = ImGui::GetIO().BackendRendererUserData;
+    if(bd) {
         ImGui_ImplDX11_Shutdown();
     }
     m_d3d11 = {};

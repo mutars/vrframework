@@ -87,6 +87,7 @@ target_link_libraries("${PROJECT_NAME}" PUBLIC
         bddisasm
         shlwapi
         minhook
+#        xbyak
         safetyhook
 #        PolyHook_2
 #        ViGEmClient
@@ -107,6 +108,7 @@ target_include_directories(
     $<BUILD_INTERFACE:${SimpleIni_SOURCE_DIR}>
     "extern/openvr/headers"
     "extern/nlohmann"
+#   "${xbyak_SOURCE_DIR}/xbyak"
     "${minhook_SOURCE_DIR}/include"
     "${vigemclient_SOURCE_DIR}/include"
     "${minhook_SOURCE_DIR}/src/hde"

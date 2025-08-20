@@ -6,6 +6,8 @@
 #include <wrl.h>
 
 #include <_deps/directxtk-src/Inc/SpriteBatch.h>
+#include "PostProcess.h"
+
 
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_D3D11
@@ -22,6 +24,7 @@ public:
     void on_reset(VR* vr);
 
     auto& openxr() { return m_openxr; }
+    const auto& get_backbuffer_size() const { return m_backbuffer_size; }
 
 private:
     template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -80,7 +83,7 @@ private:
         }
     };
 
-    std::array<float, 2> m_backbuffer_size{};
+    uint32_t m_backbuffer_size[2]{};
 
     ComPtr<ID3D11Texture2D> m_left_eye_tex{};
     ComPtr<ID3D11Texture2D> m_right_eye_tex{};
@@ -97,6 +100,7 @@ private:
     TextureContext m_left_eye_rt{};
     TextureContext m_right_eye_rt{};
     std::unique_ptr<DirectX::DX11::SpriteBatch> m_sprite_batch{};
+    std::unique_ptr<DirectX::DX11::ToneMapPostProcess> m_toneMap{};
 
     bool m_backbuffer_is_8bit{false};
 

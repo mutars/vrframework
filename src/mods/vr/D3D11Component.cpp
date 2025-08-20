@@ -226,7 +226,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
     auto runtime = vr->get_runtime();
 
     // If m_frame_count is even, we're rendering the left eye.
-    if (vr->m_render_frame_count % 2 == vr->m_left_eye_interval) {
+    if (vr->m_presenter_frame_count % 2 == vr->m_left_eye_interval) {
         auto copy_from_tex = m_backbuffer_is_8bit ? backbuffer : m_left_eye_rt.tex;
 
         // HDR compatible path. If backbuffer is 8bit, we just copy from that instead.
@@ -237,15 +237,11 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             ID3D11RenderTargetView* views[] = { m_left_eye_rt };
             context->OMSetRenderTargets(1, views, nullptr);
 
-            m_sprite_batch->Begin();
-
             D3D11_VIEWPORT viewport{};
             viewport.Width = m_backbuffer_size[0];
             viewport.Height = m_backbuffer_size[1];
-            m_sprite_batch->SetViewport(viewport);
-
             context->RSSetViewports(1, &viewport);
-            
+
             D3D11_RECT scissor_rect{};
             scissor_rect.left = 0;
             scissor_rect.top = 0;
@@ -253,15 +249,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             scissor_rect.bottom = m_backbuffer_size[1];
             context->RSSetScissorRects(1, &scissor_rect);
 
-            RECT dest_rect{};
-            dest_rect.left = 0;
-            dest_rect.top = 0;
-            dest_rect.right = m_backbuffer_size[0];
-            dest_rect.bottom = m_backbuffer_size[1];
-
-            m_sprite_batch->Draw(m_backbuffer_copy_rt, dest_rect, DirectX::Colors::White);
-
-            m_sprite_batch->End();
+            m_toneMap->SetOperator(DirectX::ToneMapPostProcess::ACESFilmic);
+            m_toneMap->SetExposure(-1.0f);
+            m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
+            m_toneMap->Process(context.Get());
         } else if (m_backbuffer_is_8bit) {
             context->CopyResource(m_left_eye_tex.Get(), backbuffer.Get());
         }
@@ -295,15 +286,11 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             ID3D11RenderTargetView* views[] = { m_right_eye_rt };
             context->OMSetRenderTargets(1, views, nullptr);
 
-            m_sprite_batch->Begin();
-
             D3D11_VIEWPORT viewport{};
             viewport.Width = m_backbuffer_size[0];
             viewport.Height = m_backbuffer_size[1];
-            m_sprite_batch->SetViewport(viewport);
-
             context->RSSetViewports(1, &viewport);
-            
+
             D3D11_RECT scissor_rect{};
             scissor_rect.left = 0;
             scissor_rect.top = 0;
@@ -311,15 +298,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             scissor_rect.bottom = m_backbuffer_size[1];
             context->RSSetScissorRects(1, &scissor_rect);
 
-            RECT dest_rect{};
-            dest_rect.left = 0;
-            dest_rect.top = 0;
-            dest_rect.right = m_backbuffer_size[0];
-            dest_rect.bottom = m_backbuffer_size[1];
-
-            m_sprite_batch->Draw(m_backbuffer_copy_rt, DirectX::Colors::White);
-
-            m_sprite_batch->End();
+            m_toneMap->SetOperator(DirectX::ToneMapPostProcess::ACESFilmic);
+            m_toneMap->SetExposure(-1.0f);
+            m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
+            m_toneMap->Process(context.Get());
         }
 
         if (runtime->ready()) {
@@ -427,6 +409,7 @@ void D3D11Component::on_reset(VR* vr) {
     m_left_eye_depthstencil.Reset();
     m_right_eye_depthstencil.Reset();
     m_sprite_batch.reset();
+    m_toneMap.reset();
 
     if (vr->get_runtime()->is_openxr() && vr->get_runtime()->loaded) {
         if (m_openxr.last_resolution[0] != vr->get_hmd_width() || m_openxr.last_resolution[1] != vr->get_hmd_height()) {
@@ -525,6 +508,7 @@ bool D3D11Component::setup() {
     }
 
     m_sprite_batch = std::make_unique<DirectX::DX11::SpriteBatch>(context.Get());
+    m_toneMap = std::make_unique<DirectX::DX11::ToneMapPostProcess>(device);
 
     spdlog::info("[VR] d3d11 textures have been setup");
 

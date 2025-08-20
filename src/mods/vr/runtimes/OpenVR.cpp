@@ -161,8 +161,8 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
         return Matrix4x4f {
             (2.0f * inv_rl), 0.0f, 0.0f, 0.0f,
             0.0f, (2.0f * inv_tb), 0.0f, 0.0f,
-            (sum_rl * inv_rl), (sum_tb * inv_tb), nearz/(farz-nearz),               -1.0f,
-            0.0f, 0.0f, (nearz*farz)/(nearz-farz),         0.0f
+            (sum_rl * inv_rl), (sum_tb * inv_tb), nearz/(nearz-farz),               -1.0f,
+            0.0f, 0.0f, (nearz*farz)/(farz-nearz),         0.0f
         };
     };
     // if we've not yet derived an eye projection matrix, or we've changed the projection, derive it here

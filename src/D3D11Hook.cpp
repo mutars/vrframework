@@ -111,6 +111,10 @@ bool D3D11Hook::unhook() {
     spdlog::info("Unhooking D3D11");
 
     if (m_present_hook->remove() && m_resize_buffers_hook->remove()) {
+        // Release multithread interface
+        m_multithread.Reset();
+        m_multithread_protection_set = false;
+
         m_hooked = false;
         return true;
     }
@@ -151,6 +155,9 @@ HRESULT WINAPI D3D11Hook::present(IDXGISwapChain* swap_chain, UINT sync_interval
     }*/
 
     swap_chain->GetDevice(__uuidof(d3d11->m_device), (void**)&d3d11->m_device);
+
+    // Enable multithread protection once the real device is available
+    d3d11->ensure_multithread_protection();
 
     /*if (d3d11->m_set_render_targets_hook == nullptr) {
         ComPtr<ID3D11DeviceContext> context{};
@@ -284,4 +291,22 @@ void WINAPI D3D11Hook::set_render_targets(
     auto set_render_targets_fn = d3d11->m_set_render_targets_hook->get_original<decltype(set_render_targets)*>();
 
     return set_render_targets_fn(context, num_views, rtvs, dsv);
+}
+
+// New: ensure multithread protection on the current device
+void D3D11Hook::ensure_multithread_protection() {
+    if (!m_enable_multithread_protection || m_multithread_protection_set || m_device == nullptr) {
+        return;
+    }
+
+    ID3D11Multithread* mt = nullptr;
+    const HRESULT hr = m_device->QueryInterface(__uuidof(ID3D11Multithread), (void**)&mt);
+    if (SUCCEEDED(hr) && mt != nullptr) {
+        m_multithread.Attach(mt);
+        m_multithread->SetMultithreadProtected(TRUE);
+        m_multithread_protection_set = true;
+        spdlog::info("ID3D11Multithread protection enabled");
+    } else {
+        spdlog::warn("ID3D11Multithread not supported on this device (hr=0x{:08X})", static_cast<unsigned>(hr));
+    }
 }
