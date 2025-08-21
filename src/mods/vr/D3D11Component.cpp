@@ -1,3 +1,4 @@
+#include <engine/models/ModSettings.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <openvr.h>
@@ -249,8 +250,9 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             scissor_rect.bottom = m_backbuffer_size[1];
             context->RSSetScissorRects(1, &scissor_rect);
 
-            m_toneMap->SetOperator(DirectX::ToneMapPostProcess::ACESFilmic);
-            m_toneMap->SetExposure(-.5f);
+            ModSettings::InternalSettings& settings = ModSettings::g_internalSettings;
+            m_toneMap->SetOperator(static_cast<DirectX::ToneMapPostProcess::Operator>(settings.toneMapAlg));
+            m_toneMap->SetExposure(settings.toneMapExposure);
             m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
             m_toneMap->Process(context.Get());
         } else if (m_backbuffer_is_8bit) {
@@ -298,8 +300,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             scissor_rect.bottom = m_backbuffer_size[1];
             context->RSSetScissorRects(1, &scissor_rect);
 
-            m_toneMap->SetOperator(DirectX::ToneMapPostProcess::ACESFilmic);
-            m_toneMap->SetExposure(-.5f);
+
+            ModSettings::InternalSettings& settings = ModSettings::g_internalSettings;
+            m_toneMap->SetOperator(static_cast<DirectX::ToneMapPostProcess::Operator>(settings.toneMapAlg));
+            m_toneMap->SetExposure(settings.toneMapExposure);
             m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
             m_toneMap->Process(context.Get());
         }

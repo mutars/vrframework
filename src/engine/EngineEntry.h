@@ -25,10 +25,19 @@ private:
         "Left",
     };
 
-    const ModSlider::Ptr m_hud_scale{ ModSlider::create(generate_name("HudScale"), 0.1, 1.0, 0.5) };
-    const ModSlider::Ptr m_hud_offset_y{ ModSlider::create(generate_name("HudOffsetY"), -1.0, 1.0, -0.10) };
-    const ModToggle::Ptr m_dlss_fix{ModToggle::create("Nvidia DLSS Fix", true)};
+    inline static const std::vector<std::string> s_tone_map_algorithms {
+        "None",
+        "Saturate",
+        "Reinhard",
+        "ACESFilmic",
+    };
+
+    const ModSlider::Ptr m_hud_scale{ ModSlider::create(generate_name("HudScale"), 0.1, 1.0, 0.4) };
+    const ModSlider::Ptr m_hud_offset_y{ ModSlider::create(generate_name("HudOffsetY"), -1.0, 1.0, 0.00) };
+    const ModSlider::Ptr m_tone_map_exposure{ ModSlider::create(generate_name("ToneMapExposure"), -2.0, 2.0, 0.0) };
+    const ModCombo::Ptr m_tone_map_algorithm{ ModCombo::create(generate_name("ToneMapAlgorithm"), s_tone_map_algorithms, 0) };
+//    const ModToggle::Ptr m_dlss_fix{ModToggle::create("NvidiaDLSSFix", true)};
 //    const ModSlider::Ptr m_display_distance{ ModSlider::create(generate_name("DisplayDistance"), 0.0, 3.0, 2.0) };
 //    const ModToggle::Ptr m_force_flat_screen{ ModToggle::create(generate_name("Force Flat Screen"), false) };
-    ValueList m_options{*m_hud_scale, *m_hud_offset_y, *m_dlss_fix};
+    ValueList m_options{*m_hud_scale, *m_hud_offset_y, *m_tone_map_exposure, *m_tone_map_algorithm};
 };

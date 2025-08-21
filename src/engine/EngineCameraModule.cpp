@@ -38,7 +38,7 @@ sdk::Matrix4x4* EngineCameraModule::onCalcProjection(sdk::CameraClient* a1, floa
         auto scale_factor = ModSettings::g_UISettings.hudScale;
         outProjMatrix->row[0][0] *= scale_factor;
         outProjMatrix->row[1][1] *= scale_factor;
-        //        outProjMatrix->row[3][1] += ModSettings::g_UISettings.hudVerticalOffset;
+        outProjMatrix->row[3][1] += ModSettings::g_UISettings.hudVerticalOffset;
         auto invViewProj  = glm::inverse(*(glm::mat4*)outProjMatrix);
         *outInvProjMatrix = *(sdk::Matrix4x4*)&invViewProj;
     }

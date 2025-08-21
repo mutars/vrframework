@@ -37,12 +37,12 @@ namespace ModSettings
         bool      showQuadDisplay{ false };
         float     quadDisplayDistance{ 2.0 };
         float     worldScale{ 1.0 };
-        float     motionControlSensitivityH{ 57.2958 / 2.0f };
-        float     motionControlSensitivityV{ 57.2958 / 2.0f };
         bool      leftHandedControls{ false };
         bool      debugShaders{ false };
         bool      cameraShake{ false };
         bool      nvidiaMotionVectorFix{ false };
+        int       toneMapAlg{ 0 }; // None, Saturate, Reinhard, ACESFilmic
+        float     toneMapExposure{ 0.0f };
     };
 
     extern InternalSettings g_internalSettings;
