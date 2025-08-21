@@ -39,4 +39,10 @@ namespace memory {
         static uintptr_t patchAddress = (uintptr_t)memory::g_mod + 0x991695;
         return patchAddress;
     }
+
+    inline uintptr_t camera_server_vftbl_addr() {
+        // ".?AVServer@camera@@"
+        static uintptr_t addr = (uintptr_t)memory::g_mod + 0xdf9460;
+        return addr;
+    }
 }

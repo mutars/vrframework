@@ -15,6 +15,7 @@ using namespace nlohmann;
 
 namespace runtimes {
 VRRuntime::Error OpenXR::synchronize_frame() {
+    SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
 
     // cant sync frame between begin and endframe
@@ -247,6 +248,7 @@ VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
 }
 
 VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
+    SCOPE_PROFILER();
     auto& current_pipeline_state = this->pipeline_states[this->internal_frame_counter % QUEUE_SIZE];
     if (!this->session_ready || current_pipeline_state.views.empty()) {
         return VRRuntime::Error::SUCCESS;
@@ -349,6 +351,7 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 
 
 VRRuntime::Error OpenXR::update_input() {
+    SCOPE_PROFILER();
     if (!this->ready() || this->session_state != XR_SESSION_STATE_FOCUSED) {
         return (VRRuntime::Error)XR_ERROR_SESSION_NOT_READY;
     }
@@ -1339,6 +1342,7 @@ void OpenXR::save_bindings() {
 }
 
 XrResult OpenXR::begin_frame() {
+    SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
 
     if (!this->ready() || !this->got_first_poses || !this->frame_synced) {
@@ -1373,6 +1377,7 @@ XrResult OpenXR::begin_frame() {
 }
 
 XrResult OpenXR::end_frame() {
+    SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
 
     if (!this->ready() || !this->got_first_poses || !this->frame_synced) {
@@ -1392,18 +1397,18 @@ XrResult OpenXR::end_frame() {
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
     int current_frame = internal_frame_counter % QUEUE_SIZE;
-//    int prev_frame = internal_frame_counter > 0 ? ((internal_frame_counter - 1) % QUEUE_SIZE): current_frame;
+    int prev_frame = internal_frame_counter > 0 ? ((internal_frame_counter - 1) % QUEUE_SIZE): current_frame;
     auto current_pipeline = &this->pipeline_states[current_frame];
-//    auto prev_pipeline = &this->pipeline_states[prev_frame];
+    auto prev_pipeline = &this->pipeline_states[prev_frame];
     if (current_pipeline->frame_state.shouldRender == XR_TRUE) {
-        projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
+        projection_layer_views.resize(prev_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         if (!ModSettings::g_internalSettings.showQuadDisplay) {
             for (auto i = 0; i < projection_layer_views.size(); ++i) {
                 const auto& swapchain = this->swapchains[i];
     
                 projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-                projection_layer_views[i].pose = current_pipeline->stage_views[i].pose;
-                projection_layer_views[i].fov = current_pipeline->stage_views[i].fov;
+                projection_layer_views[i].pose = prev_pipeline->stage_views[i].pose;
+                projection_layer_views[i].fov = prev_pipeline->stage_views[i].fov;
                 projection_layer_views[i].subImage.swapchain = swapchain.handle;
                 int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
                 int texture_area_width = swapchain.width;
@@ -1444,7 +1449,7 @@ XrResult OpenXR::end_frame() {
                 
                 // Set pose relative to view
                 quad_layers[i].pose.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
-                quad_layers[i].pose.position = current_pipeline->stage_views[i].pose.position;
+                quad_layers[i].pose.position = prev_pipeline->stage_views[i].pose.position;
                 // Move 2m forward from eye position
                 quad_layers[i].pose.position.z -= ModSettings::g_internalSettings.quadDisplayDistance;
                 
@@ -1469,12 +1474,11 @@ XrResult OpenXR::end_frame() {
     this->begin_profile();
     auto result = xrEndFrame(this->session, &frame_end_info);
     this->end_profile("xrEndFrame");
-
     if (result != XR_SUCCESS) {
         spdlog::error("[VR] xrEndFrame failed: {}", this->get_result_string(result));
     }
 
-//    internal_frame_counter++;
+    internal_frame_counter++;
     this->frame_began = false;
     this->frame_synced = false;
 

@@ -68,7 +68,7 @@ protected:
     // New: multithread protection support
     ComPtr<ID3D11Multithread> m_multithread{};
     bool m_multithread_protection_set{ false };
-    bool m_enable_multithread_protection{ true };
+    bool m_enable_multithread_protection{ false };
     void ensure_multithread_protection();
 
     static HRESULT WINAPI present(IDXGISwapChain* swap_chain, UINT sync_interval, UINT flags);

@@ -616,15 +616,15 @@ void VR::update_hmd_state() {
 
     runtime->update_matrices(m_nearz, m_farz);
 
-    m_views.submit_eye_view(get_runtime()->eyes[vr::Eye_Left], m_engine_frame_count);
-    m_views.submit_eye_view(get_runtime()->eyes[vr::Eye_Right], m_engine_frame_count + 1);
-    m_views.submit_projection(get_runtime()->projections[vr::Eye_Left], m_engine_frame_count);
-    m_views.submit_projection(get_runtime()->projections[vr::Eye_Right], m_engine_frame_count + 1);
+//    m_views.submit_eye_view(get_runtime()->eyes[vr::Eye_Left], m_engine_frame_count);
+//    m_views.submit_eye_view(get_runtime()->eyes[vr::Eye_Right], m_engine_frame_count + 1);
+//    m_views.submit_projection(get_runtime()->projections[vr::Eye_Left], m_engine_frame_count);
+//    m_views.submit_projection(get_runtime()->projections[vr::Eye_Right], m_engine_frame_count + 1);
 //    m_views.submit_standing_origin(m_standing_origin, m_engine_frame_count);
 //    m_views.submit_standing_origin(m_standing_origin, m_engine_frame_count + 1);
-    auto hmd_transform = get_transform(0);
-    m_views.submit_hmd_view(hmd_transform, m_engine_frame_count);
-    m_views.submit_hmd_view(hmd_transform, m_engine_frame_count + 1);
+//    auto hmd_transform = get_transform(0);
+//    m_views.submit_hmd_view(hmd_transform, m_engine_frame_count);
+//    m_views.submit_hmd_view(hmd_transform, m_engine_frame_count + 1);
     runtime->got_first_poses = true;
 }
 
@@ -847,7 +847,8 @@ VRRuntime::Eye VR::get_current_render_eye() const {
 }
 
 void VR::on_present() {
-    m_presenter_frame_count = m_render_frame_count;
+    SCOPE_PROFILER();
+//    m_presenter_frame_count = m_render_frame_count;
     utility::ScopeGuard _guard {[&]() {
         if (!is_using_afr() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
@@ -1014,7 +1015,6 @@ void VR::on_engine_tick(void* entry) {
     if (!runtime->loaded) {
         return;
     }
-    m_engine_frame_count++;
 
     if ((m_engine_frame_count) % 2 == m_left_eye_interval) {
         update_hmd_state();
@@ -1029,22 +1029,21 @@ void VR::on_begin_rendering(void* entry) {
         return;
     }
     m_in_render = true;
-    m_render_frame_count = m_engine_frame_count;
+//    m_render_frame_count = m_engine_frame_count;
 //    on_wait_rendering(entry);
-    //    m_engine_frame_count++;
     if ((m_render_frame_count)% 2 == m_left_eye_interval) {
         if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-            if (runtime->is_openxr()) {
-                if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-//                    spdlog::warn("VR: on_engine_tick: synchronize_frame failed");
+            if (g_framework->get_renderer_type() == GOWVR::RendererType::D3D11) {
+                if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
                     return;
                 }
-//                spdlog::info("VR: on_engine_tick: begin_frame");
-                m_openxr->begin_frame();
-            } else {
-                if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                    return;
-                }
+            } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                return;
+            }
+            m_openxr->begin_frame();
+        } else {
+            if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+                return;
             }
         }
     }

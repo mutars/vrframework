@@ -11,10 +11,11 @@
 void EngineRendererModule::InstallHooks()
 {
     spdlog::info("Installing EngineRendererModule hooks");
-    auto worldTickFunct = (uintptr_t) memory::g_mod + 0x406820;
-    m_worldTickHook = safetyhook::create_inline((void*)worldTickFunct, (void*)&EngineRendererModule::onWorldTick);
-    if(!m_worldTickHook) {
-        spdlog::error("Failed to hook world tick");
+
+    auto submitMarkerFunct = (uintptr_t) memory::g_mod + 0x10650;
+    m_submitMarkerHook = safetyhook::create_inline((void*)submitMarkerFunct, (void*)&EngineRendererModule::submit_nvidia_marker);
+    if(!m_submitMarkerHook) {
+        spdlog::error("Failed to hook submit nvidia marker");
     }
 
     auto checkResolutionFunct = (uintptr_t) memory::g_mod + 0x98fbe0;
@@ -24,15 +25,40 @@ void EngineRendererModule::InstallHooks()
     }
 }
 
-uintptr_t EngineRendererModule::onWorldTick() {
+
+uintptr_t EngineRendererModule::submit_nvidia_marker(uintptr_t pDevice, sdk::NV_LATENCY_MARKER_PARAMS_V1* marker)
+{
     static auto instance = Get();
     static     auto        vr            = VR::get();
-    g_framework->run_imgui_frame(false);
-    vr->on_engine_tick(nullptr);
-    vr->on_begin_rendering(nullptr);
-    auto result = instance->m_worldTickHook.call<uintptr_t>();
-    return result;
+    auto markerType = marker->markerType;
+    auto frameID = marker->frameID;
+    static bool engine_notified = false;
+
+    if ((markerType == sdk::NV_LATENCY_MARKER_TYPE::SIMULATION_START || markerType == sdk::NV_LATENCY_MARKER_TYPE::SIMULATION_END) && !engine_notified) {
+        vr->m_engine_frame_count = (int)frameID;
+        engine_notified = true;
+        vr->on_engine_tick(nullptr);
+    }
+    // Reset notification if markerType is 1
+    if (markerType == sdk::NV_LATENCY_MARKER_TYPE::SIMULATION_END) {
+        engine_notified = false;
+    }
+
+    if(markerType == sdk::NV_LATENCY_MARKER_TYPE::RENDERSUBMIT_START) {
+        vr->m_render_frame_count = (int)frameID;
+        vr->on_begin_rendering(nullptr);
+    }
+
+    if(markerType == sdk::NV_LATENCY_MARKER_TYPE::PRESENT_START) {
+        vr->m_presenter_frame_count = (int)frameID;
+    }
+
+    if(markerType == sdk::NV_LATENCY_MARKER_TYPE::RENDERSUBMIT_START) {
+        g_framework->run_imgui_frame(false);
+    }
+    return  instance->m_submitMarkerHook.call<uintptr_t>(pDevice, marker);
 }
+
 
 bool EngineRendererModule::checkResolution(int* outFlags, int maxMessagesToProcess, char filterSpecialMessages)
 {

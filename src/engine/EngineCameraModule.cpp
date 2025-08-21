@@ -14,7 +14,7 @@ void EngineCameraModule::InstallHooks()
         spdlog::error("Failed to hook m_onCalcProjection");
     }
 
-    auto calcFinalViewFn{ (uintptr_t)memory::g_mod + 0x4c25a0 };
+    auto calcFinalViewFn{ (uintptr_t)memory::g_mod + 0x4c1540 };
     m_onCalcFinalView = safetyhook::create_inline((void*)calcFinalViewFn, (void*)&EngineCameraModule::onCalcFinalView);
     if (!m_onCalcFinalView) {
         spdlog::error("Failed to hook m_onCalcFinalView");
