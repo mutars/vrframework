@@ -1791,6 +1791,9 @@ bool GOWVR::init_d3d11() {
         return false;
     }
 
+    float scale_factor = backbuffer_desc.Width / 1920.0f;
+    ImGui::GetIO().FontGlobalScale = scale_factor;
+
     return true;
 }
 

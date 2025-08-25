@@ -1,6 +1,7 @@
 #define DXGI_INJECTION
 
 #include "GOW2VR.hpp"
+#include <engine/DLSSModule.h>
 //#include <engine/EngineRendererModule.h>
 //#include <engine/LuaModule.h>
 // #include "Settings.h"
@@ -24,7 +25,7 @@ bool verifyLeftHandedCoordinates() {
 }
 
 void InitThread(HINSTANCE hModule) {
-    Sleep(3000);
+    DLSSModule::Get()->InstallHooks();
 //    LuaModule::Get()->InstallHooks();
     g_framework = std::make_unique<GOWVR>(hModule);
 //    EngineRendererModule::Get()->InstallHooks();

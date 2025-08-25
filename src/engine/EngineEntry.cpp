@@ -31,10 +31,10 @@ void EngineEntry::on_draw_ui()
     {
         update(true);
     }
-//
-//    if(m_dlss_fix->draw("DLSS and Motion vector Fix")) {
-//        update(true);
-//    }
+
+    if(m_dlss_fix->draw("DLSS and Motion vector Fix")) {
+        update(true);
+    }
 
     if(m_tone_map_algorithm->draw("Tone Map Algorithm"))
     {
@@ -106,7 +106,7 @@ void EngineEntry::on_config_save(utility::Config& cfg)
 void EngineEntry::update(bool force) {
     ModSettings::g_UISettings.hudScale = m_hud_scale->value();
     ModSettings::g_UISettings.hudVerticalOffset = m_hud_offset_y->value();
-//    ModSettings::g_internalSettings.nvidiaMotionVectorFix = m_dlss_fix->value();
+    ModSettings::g_internalSettings.nvidiaMotionVectorFix = m_dlss_fix->value();
     ModSettings::g_internalSettings.toneMapAlg = m_tone_map_algorithm->value();
     ModSettings::g_internalSettings.toneMapExposure = m_tone_map_exposure->value();
 }
