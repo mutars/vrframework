@@ -9,7 +9,7 @@
 // This header should contain the compiled compute shader bytecode
 // for a D3D11 target (e.g., cs_5_0)
 namespace shaders::compute {
-#include "shader-headers/motion_vector_correction_cs.h"
+//#include "shader-headers/motion_vector_correction_cs.h"
 }
 
 bool MotionVectorReprojectionD3D11::setup(ID3D11Device* device) {
@@ -32,17 +32,17 @@ void MotionVectorReprojectionD3D11::Reset() {
 }
 
 bool MotionVectorReprojectionD3D11::createComputeShader(ID3D11Device* device) {
-    HRESULT hr = device->CreateComputeShader(
-        shaders::compute::g_CSMain, // Pointer to compiled shader bytecode
-        sizeof(shaders::compute::g_CSMain), // Size of the bytecode
-        nullptr,
-        &m_compute_shader
-    );
+//    HRESULT hr = device->CreateComputeShader(
+//        shaders::compute::g_CSMain, // Pointer to compiled shader bytecode
+//        sizeof(shaders::compute::g_CSMain), // Size of the bytecode
+//        nullptr,
+//        &m_compute_shader
+//    );
 
-    if (FAILED(hr)) {
-        spdlog::error("[VR] Failed to create compute shader. HRESULT: {:#x}", hr);
-        return false;
-    }
+//    if (FAILED(hr)) {
+//        spdlog::error("[VR] Failed to create compute shader. HRESULT: {:#x}", hr);
+//        return false;
+//    }
     return true;
 }
 
