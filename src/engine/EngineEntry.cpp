@@ -1,14 +1,14 @@
 #include "EngineEntry.h"
+#include "DLSSModule.h"
 #include "EngineCameraModule.h"
 #include "EngineRendererModule.h"
 #include "EngineTwicks.h"
-#include "models/GOWGameState.h"
 #include <engine/models/ModSettings.h>
-#include <engine/models/StatefullData.h>
 #include <mods/VR.hpp>
 
 std::optional<std::string> EngineEntry::on_initialize()
 {
+    DLSSModule::Get()->InstallHooks();
     EngineTwicks::DisableBadEffects();
     EngineRendererModule::Get()->InstallHooks();
     EngineCameraModule::Get()->InstallHooks();

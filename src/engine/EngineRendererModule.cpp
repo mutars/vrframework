@@ -12,13 +12,13 @@ void EngineRendererModule::InstallHooks()
 {
     spdlog::info("Installing EngineRendererModule hooks");
 
-    auto submitMarkerFunct = (uintptr_t) memory::g_mod + 0x10650;
+    auto submitMarkerFunct = memory::submit_reflex_marker_fn_addr();
     m_submitMarkerHook = safetyhook::create_inline((void*)submitMarkerFunct, (void*)&EngineRendererModule::submit_nvidia_marker);
     if(!m_submitMarkerHook) {
         spdlog::error("Failed to hook submit nvidia marker");
     }
 
-    auto checkResolutionFunct = (uintptr_t) memory::g_mod + 0x98fbe0;
+    auto checkResolutionFunct = memory::check_resolution_fn_addr();
     m_checkResolutionHook = safetyhook::create_inline((void*)checkResolutionFunct, (void*)&EngineRendererModule::checkResolution);
     if(!m_checkResolutionHook) {
         spdlog::error("Failed to hook check resolution");
@@ -64,9 +64,8 @@ bool EngineRendererModule::checkResolution(int* outFlags, int maxMessagesToProce
 {
     static auto instance = Get();
     static auto vr = VR::get();
-    //TODO move to offsets
-    static auto pRenderW = (int*)((uintptr_t)memory::g_mod + 0x504c398);
-    static auto pRenderH = (int*)((uintptr_t)memory::g_mod + 0x504c39c);
+    static auto pRenderW = (int*)(memory::get_render_width_addr());
+    static auto pRenderH = (int*)(memory::get_render_height_addr());
     int oldRenderW = *pRenderW;
     int oldRenderH = *pRenderH;
     auto resp = instance->m_checkResolutionHook.call<bool>(outFlags, maxMessagesToProcess, filterSpecialMessages);

@@ -36,13 +36,75 @@ namespace memory {
     }
 
     inline uintptr_t disable_letterbox_addr() {
-        static uintptr_t patchAddress = (uintptr_t)memory::g_mod + 0x991695;
-        return patchAddress;
-    }
-
-    inline uintptr_t camera_server_vftbl_addr() {
-        // ".?AVServer@camera@@"
-        static uintptr_t addr = (uintptr_t)memory::g_mod + 0xdf9460;
+        static auto pattern = "77 34 F3 0F 10 35";
+        static auto addr = FuncRelocation("disable_letterbox_addr", pattern, 0x991695);
         return addr;
     }
+
+    inline uintptr_t calc_projection_fn_addr() {
+        static auto pattern = "4C 8B DC 49 89 5B 18 49 89 73 20 55 57 41 54 41 55 41 56 49 8D 6B";
+        static auto addr = FuncRelocation("calc_projection_fn_addr", pattern, 0x4e74c0);
+        return addr;
+    }
+
+    inline uintptr_t update_views_fn_addr()
+    {
+        static auto pattern = "48 8B C4 57 48 81 EC A0 00 00 00 48 89";
+        static auto addr    = FuncRelocation("update_views_fn_addr", pattern, 0x4c1540);
+        return addr;
+    }
+
+    inline uintptr_t submit_reflex_marker_fn_addr() {
+        static auto pattern = "48 89 74 24 10 57 48 83 EC 20 48 8B FA 48 8B F1 F0 83 05 ? ? ? ? ? 33 D2 33 C9 E8 ? ? ? ? 85 C0 0F 85 87 00 00 00 48 89 5C 24 30 48 8B 1D ? ? ? ? 48 85 DB 75 29 48 8B 05 ? ? ? ? 48 85 C0 74 16 B9 05 4C";
+        static auto addr = FuncRelocation("submit_reflex_marker_fn_addr", pattern, 0x10650);
+        return addr;
+    }
+
+    inline uintptr_t check_resolution_fn_addr() {
+        static auto pattern = "4C 8B DC 55 41 54 41 56 41";
+        static auto addr = FuncRelocation("check_resolution_fn_addr", pattern, 0x98fbe0);
+        return addr;
+    }
+
+
+    inline uintptr_t get_render_width_addr() {
+        static auto pattern = "89 05 ? ? ? ? 8B 45 13";
+        static auto addr = InstructionRelocation("get_render_width_addr", pattern, 2, 6, 0x504c398);
+        return addr;
+    }
+
+    inline uintptr_t get_render_height_addr() {
+        return get_render_width_addr() + 4;
+    }
+
+    inline uintptr_t recalc_constants_buffer_fn_addr() {
+        static auto pattern = "48 8B C4 48 89 58 10 48 89 70 18 48 89 78 20 55 41 56 41 57 48 8D 6C 24 90";
+        static auto addr = FuncRelocation("recalc_constants_buffer_fn_addr", pattern, 0x4d3710);
+        return addr;
+    }
+
+    inline uintptr_t nvsdk_ngx_d3d11_evaluate_feature_fn_addr() {
+        static auto pattern = "48 83 EC 38 48 8B C1 48 8B 0D ? ? ? ? 48 85 C9 75 0A";
+        static auto addr = FuncRelocation("nvsdk_ngx_d3d11_evaluate_feature_fn_addr", pattern, 0x3dfd60);
+        return addr;
+    }
+
+    inline uintptr_t nvsdk_ngx_d3d11_create_feature_fn_addr() {
+        static auto pattern = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 48 8B 1D ? ? ? ? 49 8B F9 49 8B F0 8B";
+        static auto addr = FuncRelocation("nvsdk_ngx_d3d11_create_feature_fn_addr", pattern, 0x3dfc20);
+        return addr;
+    }
+
+    inline uintptr_t nvsdk_ngx_d3d11_release_feature_fn_addr() {
+        static auto pattern = "E8 ? ? ? ? 33 C0 49 89 87 C8 00 00 00";
+        static auto addr = InstructionRelocation("nvsdk_ngx_d3d11_release_feature_fn_addr", pattern, 1, 5,  0x3e00e0);
+        return addr;
+    }
+
+    inline uintptr_t calc_constants_buffer_root_fn_addr() {
+        static auto pattern = "4C 8B DC 55 53 57 49 8D AB 18 FF";
+        static auto addr = FuncRelocation("calc_constants_buffer_root_fn_addr", pattern, 0x4d25b0);
+        return addr;
+    }
+
 }

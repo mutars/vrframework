@@ -8,24 +8,24 @@
 void DLSSModule::InstallHooks() {
     spdlog::info("Installing DLSSModule hooks");
 
-    auto onNVSDK_NGX_D3D11_EvaluateFeatureFNAddr = (uintptr_t) memory::g_mod + 0x3dfd60;
+    auto onNVSDK_NGX_D3D11_EvaluateFeatureFNAddr = memory::nvsdk_ngx_d3d11_evaluate_feature_fn_addr();
     m_onEvaluateFeatureHook = safetyhook::create_inline((void*)onNVSDK_NGX_D3D11_EvaluateFeatureFNAddr, (void*)&DLSSModule::onNVSDK_NGX_D3D11_EvaluateFeature);
     if(!m_onEvaluateFeatureHook) {
         spdlog::error("Failed to create onNVSDK_NGX_D3D11_EvaluateFeature hook");
     }
 
-    auto onNVSDK_NGX_D3D11_CreateFeatureFNAddr = (uintptr_t) memory::g_mod + 0x3dfc20;
+    auto onNVSDK_NGX_D3D11_CreateFeatureFNAddr = memory::nvsdk_ngx_d3d11_create_feature_fn_addr();
     m_onCreateFeatureHook = safetyhook::create_inline((void*)onNVSDK_NGX_D3D11_CreateFeatureFNAddr, (void*)&DLSSModule::onNVSDK_NGX_D3D11_CreateFeature);
     if(!m_onCreateFeatureHook) {
         spdlog::error("Failed to create onNVSDK_NGX_D3D11_CreateFeature hook");
     }
-    auto onNVSDK_NGX_D3D11_ReleaseFeatureFNAddr = (uintptr_t) memory::g_mod + 0x3e00e0;
+    auto onNVSDK_NGX_D3D11_ReleaseFeatureFNAddr = memory::nvsdk_ngx_d3d11_release_feature_fn_addr();
     m_onReleaseFeatureHook = safetyhook::create_inline((void*)onNVSDK_NGX_D3D11_ReleaseFeatureFNAddr, (void*)&DLSSModule::onNVSDK_NGX_D3D11_ReleaseFeature);
     if(!m_onReleaseFeatureHook) {
         spdlog::error("Failed to create onNVSDK_NGX_D3D11_ReleaseFeature hook");
     }
 
-    auto onCalcConstantsBufferFNAddr = (uintptr_t) memory::g_mod + 0x4d25b0;
+    auto onCalcConstantsBufferFNAddr = memory::calc_constants_buffer_root_fn_addr();
     m_onCalcConstantsBufferHook = safetyhook::create_inline((void*)onCalcConstantsBufferFNAddr, (void*)&DLSSModule::onCalcConstantsBuffer);
     if(!m_onCalcConstantsBufferHook) {
         spdlog::error("Failed to create onCalcConstantsBuffer hook");
@@ -52,8 +52,7 @@ uintptr_t DLSSModule::onCalcConstantsBuffer(sdk::CommonConstantsBufferWrapper* b
         afr_history_verbose[cur_frame % 2][type] = buffer->pasViewProjS;
         buffer->pasViewProjS = afr_history_verbose[(cur_frame - 1) % 2][type];
         typedef uintptr_t* (*func_t)(sdk::CommonConstantsBufferWrapper*, uintptr_t, uintptr_t);
-        //TODO move to offsets
-        static auto recalc_buffer_fn = (func_t) ( (uintptr_t) memory::g_mod + 0x4d3710);
+        static auto recalc_buffer_fn = (func_t) ( memory::recalc_constants_buffer_fn_addr());
         recalc_buffer_fn(buffer, 0, 0);
     }
     return result;
