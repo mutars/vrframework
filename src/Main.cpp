@@ -1,6 +1,7 @@
 #define DXGI_INJECTION
 
 #include "GOW2VR.hpp"
+#include <engine/EngineTwicks.h>
 //#include <engine/EngineRendererModule.h>
 //#include <engine/LuaModule.h>
 // #include "Settings.h"
@@ -26,6 +27,7 @@ bool verifyLeftHandedCoordinates() {
 void InitThread(HINSTANCE hModule) {
 //    LuaModule::Get()->InstallHooks();
     g_framework = std::make_unique<GOWVR>(hModule);
+    EngineTwicks::DisableNvidiaSupportCheck();
 //    EngineRendererModule::Get()->InstallHooks();
 #ifdef GLM_FORCE_LEFT_HANDED
     spdlog::info("GLM_FORCE_LEFT_HANDED is defined function={} clip={}", verifyLeftHandedCoordinates(), GLM_CONFIG_CLIP_CONTROL);

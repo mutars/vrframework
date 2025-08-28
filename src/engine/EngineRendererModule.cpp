@@ -56,7 +56,8 @@ uintptr_t EngineRendererModule::submit_nvidia_marker(uintptr_t pDevice, sdk::NV_
     if(markerType == sdk::NV_LATENCY_MARKER_TYPE::RENDERSUBMIT_START) {
         g_framework->run_imgui_frame(false);
     }
-    return  instance->m_submitMarkerHook.call<uintptr_t>(pDevice, marker);
+//    return  instance->m_submitMarkerHook.call<uintptr_t>(pDevice, marker);
+    return 0;
 }
 
 

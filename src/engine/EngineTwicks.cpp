@@ -60,4 +60,36 @@ namespace EngineTwicks
         const unsigned char patch[] = { 0x00, 0x00 };
         return memory::PatchMemory(addr, patch, sizeof(patch));
     }
+
+    bool DisableNvidiaSupportCheck() {
+        const unsigned char patch2[] = { 0x90, 0x90 };
+        const unsigned char patch6[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+        auto addr = memory::submit_marker_0_check_addr();
+        auto result = true;
+        result &= memory::PatchMemory(addr, patch2, sizeof(patch2));
+        if(!result) {
+            spdlog::error("Failed to patch Nvidia Reflex Marker 0 support check");
+        }
+        addr = memory::submit_marker_1_check_addr();
+        result &= memory::PatchMemory(addr, patch2, sizeof(patch2));
+        if(!result) {
+            spdlog::error("Failed to patch Nvidia Reflex Marker 1 support check");
+        }
+        addr = memory::submit_marker_2_check_addr();
+        result &= memory::PatchMemory(addr, patch6, sizeof(patch6));
+        if(!result) {
+            spdlog::error("Failed to patch Nvidia Reflex Marker 2 support check");
+        }
+        addr = memory::submit_marker_3_check_addr();
+        result &= memory::PatchMemory(addr, patch2, sizeof(patch2));
+        if(!result) {
+            spdlog::error("Failed to patch Nvidia Reflex Marker 3 support check");
+        }
+        addr = memory::submit_marker_4_check_addr();
+        result &= memory::PatchMemory(addr, patch2, sizeof(patch2));
+        if(!result) {
+            spdlog::error("Failed to patch Nvidia Reflex Marker 4 support check");
+        }
+        return result;
+    }
 };

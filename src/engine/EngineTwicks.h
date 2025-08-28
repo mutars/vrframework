@@ -18,6 +18,7 @@ namespace EngineTwicks
     bool DisableJitter();
     bool DisableDof();
     bool DisableSharpness();
+    bool DisableNvidiaSupportCheck();
 
     inline void DisableBadEffects() {
         spdlog::info("Disabling bad effects");
