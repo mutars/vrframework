@@ -269,6 +269,15 @@ std::optional<std::string> VR::initialize_openxr() {
 
     spdlog::info("[VR] Initializing OpenXR");
 
+    if (utility::load_module_from_current_directory(L"openxr_loader.dll") == nullptr) {
+        spdlog::info("[VR] Could not load openxr_loader.dll");
+
+//        m_openxr->loaded = false;
+//        m_openxr->error = "Could not load openxr_loader.dll";
+//
+//        return std::nullopt;
+    }
+
     if (g_framework->is_dx12()) {
         m_d3d12.on_reset(this);
     } else {
