@@ -18,6 +18,15 @@
 
 namespace runtimes{
 struct OpenXR final : public VRRuntime {
+    enum class SwapchainIndex: uint8_t {
+        AFR_LEFT_EYE = 0,
+        AFR_RIGHT_EYE = 1,
+        AFR_DEPTH_LEFT_EYE = 2,
+        AFR_DEPTH_RIGHT_EYE = 3,
+        FRAMEWORK_UI = 4,
+        END = 5,
+    };
+
     OpenXR() {
         this->custom_stage = SynchronizeStage::EARLY;
     }
@@ -43,6 +52,15 @@ struct OpenXR final : public VRRuntime {
     bool ready() const override {
         return VRRuntime::ready() && this->session_ready;
     }
+
+    bool is_depth_allowed() const override {
+        return this->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
+    }
+
+    bool is_cylinder_layer_allowed() const override {
+        return this->enabled_extensions.contains(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME);
+    }
+
 
     inline int get_view_count() const {
         return this->pipeline_states[internal_frame_counter % QUEUE_SIZE].views.size();
@@ -80,6 +98,12 @@ struct OpenXR final : public VRRuntime {
 
     void destroy() override;
 
+    std::vector<DXGI_FORMAT> get_supported_swapchain_formats() const;
+    bool is_supported_swapchain_format(DXGI_FORMAT format) const {
+        const auto supported = this->get_supported_swapchain_formats();
+
+        return std::find(supported.begin(), supported.end(), format) != supported.end();
+    }
 public: 
     // OpenXR specific methods
     std::string get_result_string(XrResult result) const;
@@ -99,8 +123,16 @@ public:
     #endif
     }
 
+    static XrQuaternionf to_openxr(const glm::quat& q) {
+        return XrQuaternionf{ q.x, q.y, q.z, q.w };
+    }
+
+    static XrVector3f to_openxr(const glm::vec3& v) {
+        return XrVector3f{ v.x, v.y, v.z };
+    }
+
     XrResult begin_frame();
-    XrResult end_frame();
+    XrResult end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, bool has_depth = false);
 
     void begin_profile() {
         if (!this->profile_calls) {
@@ -146,7 +178,10 @@ public:
 
     std::recursive_mutex sync_mtx{};
 
-    XrInstance instance{XR_NULL_HANDLE};
+    // Making it static because for some reason destroying it doesn't actually completely destroy everything.
+    // So we must make sure it always exists if we ever re-initialize OpenXR.
+    static inline XrInstance instance{XR_NULL_HANDLE};
+
     XrSession session{XR_NULL_HANDLE};
     XrSpace stage_space{XR_NULL_HANDLE};
     XrSpace view_space{XR_NULL_HANDLE}; // for generating view matrices
@@ -162,8 +197,10 @@ public:
 
 //    XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
 
+    std::unordered_set<std::string> enabled_extensions{};
+
     std::vector<XrViewConfigurationView> view_configs{};
-    std::vector<Swapchain> swapchains{};
+    Swapchain swapchains[(uintptr_t)SwapchainIndex::END]{};
 //    std::vector<XrView> views{};
 //    std::vector<XrView> stage_views{};
 

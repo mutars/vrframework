@@ -208,6 +208,23 @@ public:
         }
     }
 
+
+    Vector2f get_d3d11_rt_size() const {
+        return m_last_rt_size;
+    }
+
+    Vector2f get_d3d12_rt_size() const {
+        return m_last_rt_size;
+    }
+
+    Vector2f get_rt_size() const {
+        if (get_renderer_type() == RendererType::D3D11) {
+            return get_d3d11_rt_size();
+        }
+
+        return get_d3d12_rt_size();
+    }
+
 private:
         void save_config();
     void consume_input();
@@ -257,6 +274,7 @@ private:
 
     ImVec2 m_last_window_pos{};
     ImVec2 m_last_window_size{};
+    Vector2f m_last_rt_size{1920, 1080};
 
     struct AdditionalFont {
         std::filesystem::path filepath{};
@@ -337,8 +355,8 @@ private: // D3D11 members
 public:
     auto& get_blank_rendertarget_d3d11() { return m_d3d11.blank_rt; }
     auto& get_rendertarget_d3d11() { return m_d3d11.rt; }
-    auto get_rendertarget_width_d3d11() const { return m_d3d11.rt_width; }
-    auto get_rendertarget_height_d3d11() const { return m_d3d11.rt_height; }
+    auto get_overlay_width_d3d11() const { return m_d3d11.rt_width; }
+    auto get_overlay_height_d3d11() const { return m_d3d11.rt_height; }
 
 private: // D3D12 members
 #ifdef GOWVR_EXPERIMENTAL

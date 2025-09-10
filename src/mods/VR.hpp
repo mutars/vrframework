@@ -14,11 +14,9 @@
 
 #include "utility/Patch.hpp"
 #include "shared/sdk/Math.hpp"
-//#include "sdk/helpers/NativeObject.hpp"
-//#include "sdk/Renderer.hpp"
 #include "vr/D3D11Component.hpp"
 #include "vr/D3D12Component.hpp"
-//#include "vr/OverlayComponent.hpp"
+#include "vr/OverlayComponent.hpp"
 #include "vr/runtimes/OpenXR.hpp"
 #include "vr/runtimes/OpenVR.hpp"
 
@@ -26,6 +24,9 @@
 
 class VR : public Mod {
 public:
+    inline VR() {
+        add_components_vr();
+    }
 
     static const inline std::string s_action_trigger = "/actions/default/in/Trigger";
     static const inline std::string s_action_grip = "/actions/default/in/Grip";
@@ -58,7 +59,7 @@ public:
 
 //    void on_lua_state_created(sol::state& lua) override;
 
-//    void on_pre_imgui_frame() override;
+    void on_pre_imgui_frame() override;
     void on_present() override;
     void on_post_present() override;
 
@@ -76,7 +77,7 @@ public:
     void on_draw_ui() override;
     void on_device_reset() override;
 
-    void on_config_load(const utility::Config& cfg) override;
+    void on_config_load(const utility::Config& cfg, bool set_defaults) override;
     void on_config_save(utility::Config& cfg) override;
 
     // Application entries
@@ -116,6 +117,10 @@ public:
         return m_openvr->render_poses;
     }
 
+    auto& get_overlay_component() {
+        return m_overlay_component;
+    }
+
     auto get_hmd_width() const {
         return get_runtime()->get_width();
     }
@@ -128,11 +133,15 @@ public:
         return m_last_controller_update;
     }
 
-    int32_t get_frame_count() const;
-    int32_t get_game_frame_count() const;
+//    int32_t get_frame_count() const;
+//    int32_t get_game_frame_count() const;
 
     bool is_using_afr() const {
         return m_use_afr->value();
+    }
+
+    bool is_gui_enabled() const {
+        return true;
     }
 
     // Functions that generally use a mutex or have more complex logic
@@ -239,6 +248,15 @@ public:
     bool is_action_active(vr::VRActionHandle_t action, vr::VRInputValueHandle_t source = vr::k_ulInvalidInputValueHandle) const;
     Vector2f get_joystick_axis(vr::VRInputValueHandle_t handle) const;
 
+
+    inline vr::VRActionHandle_t get_action_handle(std::string_view action_path) {
+        if (auto it = m_action_handles.find(action_path.data()); it != m_action_handles.end()) {
+            return it->second;
+        }
+
+        return vr::k_ulInvalidActionHandle;
+    }
+
     Vector2f get_left_stick_axis() const;
     Vector2f get_right_stick_axis() const;
 
@@ -260,6 +278,33 @@ public:
 //    auto get_action_dpad_left() const { return m_action_dpad_left; }
 //    auto get_action_dpad_right() const { return m_action_dpad_right; }
 //    auto get_action_heal() const { return m_action_heal; }
+
+
+    int get_left_controller_index() const {
+        const auto wants_swap = m_swap_controllers->value();
+
+        if (m_runtime->is_openxr()) {
+            return wants_swap ? 2 : 1;
+        } else if (m_runtime->is_openvr()) {
+            return !m_controllers.empty() ? (wants_swap ? m_controllers[1] : m_controllers[0]) : -1;
+        }
+
+        return -1;
+    }
+
+
+    int get_right_controller_index() const {
+        const auto wants_swap = m_swap_controllers->value();
+
+        if (m_runtime->is_openxr()) {
+            return wants_swap ? 1 : 2;
+        } else if (m_runtime->is_openvr()) {
+            return !m_controllers.empty() ? (wants_swap ? m_controllers[0] : m_controllers[1]) : -1;
+        }
+
+        return -1;
+    }
+
     auto get_left_joystick() const { return m_left_joystick; }
     auto get_right_joystick() const { return m_right_joystick; }
 
@@ -512,7 +557,7 @@ private:
 
     vrmod::D3D11Component m_d3d11{};
     vrmod::D3D12Component m_d3d12{};
-//    vrmod::OverlayComponent m_overlay_component{};
+    vrmod::OverlayComponent m_overlay_component{};
 
     Vector4f m_original_camera_position{ 0.0f, 0.0f, 0.0f, 0.0f };
     glm::quat m_original_camera_rotation{ glm::identity<glm::quat>() };
@@ -525,6 +570,13 @@ private:
     Matrix4x4f m_render_camera_matrix{ glm::identity<Matrix4x4f>() };
 
 //    sdk::helpers::NativeObject m_via_hid_gamepad{ "via.hid.GamePad" };
+protected:
+    inline void add_components_vr() {
+        m_components = {
+            &m_overlay_component
+        };
+    }
+
 
     // options
 public:
@@ -648,7 +700,7 @@ private:
 
     friend class vrmod::D3D11Component;
     friend class vrmod::D3D12Component;
-//    friend class vrmod::OverlayComponent;
+    friend class vrmod::OverlayComponent;
 public:
     VRRuntime::Eye get_current_render_eye() const;
 };

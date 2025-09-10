@@ -14,7 +14,7 @@ Manipulate view orientation with 1 single line of code
 
 ### ImGuizmo
 
-ImGizmo is a small (.h and .cpp) library built ontop of Dear ImGui that allow you to manipulate(Rotate & translate at the moment) 4x4 float matrices. No other dependancies. Coded with Immediate Mode (IM) philosophy in mind.
+ImGuizmo is a small (.h and .cpp) library built ontop of Dear ImGui that allow you to manipulate(Rotate & translate at the moment) 4x4 float matrices. No other dependancies. Coded with Immediate Mode (IM) philosophy in mind.
 
 Built against DearImgui 1.53WIP
 
@@ -182,7 +182,7 @@ void EditTransform(const Camera& camera, matrix_t& matrix)
 ImGuizmo can be installed via [vcpkg](https://github.com/microsoft/vcpkg) and used cmake
 
 ```bash
-vcpkg install vcpkg
+vcpkg install imguizmo
 ```
 
 See the [vcpkg example](/vcpkg-example) for more details

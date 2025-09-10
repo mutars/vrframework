@@ -33,9 +33,9 @@ void GOWVRConfig::on_frame() {
     }
 }
 
-void GOWVRConfig::on_config_load(const utility::Config& cfg) {
+void GOWVRConfig::on_config_load(const utility::Config& cfg, bool set_defaults) {
     for (IModValue& option : m_options) {
-        option.config_load(cfg);
+        option.config_load(cfg, set_defaults);
     }
 
     if (m_remember_menu_state->value()) {

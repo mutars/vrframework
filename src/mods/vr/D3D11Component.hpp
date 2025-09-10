@@ -110,11 +110,25 @@ private:
         void destroy_swapchains();
         void copy(uint32_t swapchain_idx, ID3D11Texture2D* resource);
 
+
+        inline bool ever_acquired(uint32_t swapchain_idx) {
+            std::scoped_lock _{this->mtx};
+
+            for(auto& ctx : contexts) {
+                if (ctx.swapchain_index == swapchain_idx) {
+                    return ctx.ever_acquired;
+                }
+            }
+            return false;
+        }
+
         XrGraphicsBindingD3D11KHR binding = {XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
 
         struct SwapchainContext {
             std::vector<XrSwapchainImageD3D11KHR> textures{};
             uint32_t num_textures_acquired{0};
+            int swapchain_index{-1};
+            bool ever_acquired{false};
         };
 
         std::vector<SwapchainContext> contexts{};

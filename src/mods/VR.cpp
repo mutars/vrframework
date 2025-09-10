@@ -200,12 +200,12 @@ std::optional<std::string> VR::initialize_openvr() {
         return Mod::on_initialize();
     }
 
-/*    auto overlay_error = m_overlay_component.on_initialize_openvr();
+    auto overlay_error = m_overlay_component.on_initialize_openvr();
 
     if (overlay_error) {
         m_openvr->error = *overlay_error;
         return Mod::on_initialize();
-    }*/
+    }
     
     m_openvr->loaded = true;
     m_openvr->error = std::nullopt;
@@ -838,14 +838,14 @@ Matrix4x4f VR::get_current_projection_matrix(bool flip) {
 
     return get_runtime()->projections[(uint32_t)VRRuntime::Eye::RIGHT];
 }
-/*
+
 void VR::on_pre_imgui_frame() {
     if (!get_runtime()->ready()) {
         return;
     }
 
     m_overlay_component.on_pre_imgui_frame();
-}*/
+}
 
 VRRuntime::Eye VR::get_current_render_eye() const {
     if (m_engine_frame_count % 2 == m_left_eye_interval) {
@@ -955,7 +955,7 @@ void VR::on_present() {
 
     if (m_submitted || runtime->needs_pose_update) {
         if (m_submitted) {
-//            m_overlay_component.on_post_compositor_submit();
+            m_overlay_component.on_post_compositor_submit();
 
             if (runtime->is_openvr()) {
                 //vr::VRCompositor()->SetExplicitTimingMode(vr::VRCompositorTimingMode_Explicit_ApplicationPerformsPostPresentHandoff);
@@ -1418,7 +1418,7 @@ void VR::on_draw_ui() {
             ImGui::TreePop();
         }
 
-        if (m_resolution_scale->draw("Resolution Scale")) {
+        if (!m_resolution_scale->draw("Resolution Scale")) {
             m_openxr->resolution_scale = m_resolution_scale->value();
         }
     }
@@ -1515,6 +1515,9 @@ void VR::on_draw_ui() {
     auto duration_float = std::chrono::duration<float, std::milli>(m_avg_input_delay).count();
 
     ImGui::DragFloat("Avg Input Processing Delay (MS)", &duration_float, 0.00001f);
+
+    m_overlay_component.on_draw_ui();
+
 }
 
 
@@ -1532,12 +1535,12 @@ void VR::on_device_reset() {
     }
 
 
-//    m_overlay_component.on_reset();
+    m_overlay_component.on_reset();
 }
 
-void VR::on_config_load(const utility::Config& cfg) {
+void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     for (IModValue& option : m_options) {
-        option.config_load(cfg);
+        option.config_load(cfg, set_defaults);
     }
 
     // Run the rest of OpenXR initialization code here that depends on config values
@@ -1547,6 +1550,8 @@ void VR::on_config_load(const utility::Config& cfg) {
         m_openxr->resolution_scale = m_resolution_scale->value();
         initialize_openxr_swapchains();
     }
+    m_overlay_component.on_config_load(cfg, set_defaults);
+
 
     if (m_motion_controls_inactivity_timer->value() <= 10.0f) {
         m_motion_controls_inactivity_timer->value() = 30.0f;
@@ -1557,6 +1562,7 @@ void VR::on_config_save(utility::Config& cfg) {
     for (IModValue& option : m_options) {
         option.config_save(cfg);
     }
+    m_overlay_component.on_config_save(cfg);
 }
 
 Vector4f VR::get_position(uint32_t index) const {

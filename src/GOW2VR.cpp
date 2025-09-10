@@ -24,7 +24,8 @@ extern "C" {
 #include <ImGuizmo.h>
 #include <engine/models/ModSettings.h>
 #include <imgui.h>
-#include <imnodes.h>
+#include <imgui_internal.h>
+//#include <imnodes.h>
 //#include <nvidia/MotionVectorReprojection.h>
 #ifdef _DEBUG
 //#include <nvidia/ShaderDebugOverlay.h>
@@ -50,6 +51,7 @@ extern "C" {
 namespace fs = std::filesystem;
 using namespace std::literals;
 
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 std::unique_ptr<GOWVR> g_framework{};
 
@@ -1464,8 +1466,8 @@ bool GOWVR::initialize() {
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-        ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
-        ImNodes::CreateContext();
+//        ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
+//        ImNodes::CreateContext();
 
         set_imgui_style();
 
@@ -1527,8 +1529,8 @@ bool GOWVR::initialize() {
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-        ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
-        ImNodes::CreateContext();
+//        ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
+//        ImNodes::CreateContext();
 
         set_imgui_style();
 
@@ -1791,8 +1793,23 @@ bool GOWVR::init_d3d11() {
         return false;
     }
 
-    float scale_factor = backbuffer_desc.Width / 1920.0f;
-    ImGui::GetIO().FontGlobalScale = scale_factor;
+    {
+        ImGuiIO& io = ImGui::GetIO();
+
+        // Get your window and swapchain dimensions
+        RECT windowRect;
+        ::GetClientRect(m_wnd, &windowRect);
+        float windowWidth = static_cast<float>(windowRect.right - windowRect.left);
+        float windowHeight = static_cast<float>(windowRect.bottom - windowRect.top);
+
+        float textureWidth = backbuffer_desc.Width;
+        float textureHeight = backbuffer_desc.Height;
+
+        float scaleX = textureWidth / windowWidth;
+        float scaleY = textureHeight / windowHeight;
+
+        io.DisplayFramebufferScale = ImVec2(scaleX, scaleY);
+    }
 
     return true;
 }

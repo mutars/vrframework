@@ -74,8 +74,8 @@ bool EngineRendererModule::checkResolution(int* outFlags, int maxMessagesToProce
     auto vrHeight = vr->get_hmd_height();
     if (vr->is_hmd_active() && oldRenderW > 0 && oldRenderH > 0 && vrWidth > 0 && vrHeight > 0) {
         if(oldRenderW == vrWidth && oldRenderH == vrHeight) {
-            *pRenderW = vrWidth;
-            *pRenderH = vrHeight;
+            *pRenderW = oldRenderW;
+            *pRenderH = oldRenderH;
             *outFlags ^= 0x1;
         } else if(*pRenderW != vrWidth || *pRenderH != vrHeight) {
             spdlog::info("Changing render size to {}x{}", vrWidth, vrHeight);

@@ -1,80 +1,19 @@
-
-//#include "mods/APIProxy.hpp"
-//#include "mods/Camera.hpp"
-//#include "mods/Graphics.hpp"
-//#include "mods/DeveloperTools.hpp"
-//#include "mods/FirstPerson.hpp"
-//#include "mods/FreeCam.hpp"
-//#include "mods/Hooks.hpp"
-//#include "mods/IntegrityCheckBypass.hpp"
-//#include "mods/ManualFlashlight.hpp"
-//#include "mods/PluginLoader.hpp"
 #include "mods/GOWVRConfig.hpp"
-//#include "mods/Scene.hpp"
-//#include "mods/ScriptRunner.hpp"
 #include "mods/VR.hpp"
 #include "engine/EngineEntry.h"
-//#include "CreationEngine/GameSettingsComponent.h"
-//#include "mods/vr/games/RE8VR.hpp"
+
 
 #include "Mods.hpp"
 
 Mods::Mods() {
     m_mods.emplace_back(GOWVRConfig::get());
-//#ifndef GOWR
-//#if defined(RE3) || defined(RE8) || defined(MHRISE)
-//    m_mods.emplace_back(std::make_unique<IntegrityCheckBypass>());
-//#endif
-//
-//#ifndef BAREBONES
-//    m_mods.emplace_back(Hooks::get());
-//
     m_mods.emplace_back(VR::get());
-     m_mods.emplace_back(EngineEntry::Get());
-//    m_mods.emplace_back(GameSettingsComponent::Get());
-//
-//#if defined(RE8) || defined(RE7)
-//    m_mods.emplace_back(RE8VR::get());
-//#endif
-//
-//#ifndef RE8
-//#if defined(RE2) || defined(RE3)
-//    m_mods.emplace_back(FirstPerson::get());
-//#endif
-//#endif
-//
-//    // All games!!!!
-//    m_mods.emplace_back(std::make_unique<Camera>());
-//    m_mods.emplace_back(std::make_unique<Graphics>());
-//
-//#if defined(RE2) || defined(RE3) || defined(RE8)
-//    m_mods.emplace_back(std::make_unique<ManualFlashlight>());
-//#endif
-//
-//    m_mods.emplace_back(std::make_unique<FreeCam>());
-//
-//#if TDB_VER > 49
-//    m_mods.emplace_back(std::make_unique<SceneMods>());
-//#endif
-//
-//#endif
-//
-//#ifdef DEVELOPER
-//    auto dev_tools = std::make_shared<DeveloperTools>();
-//    m_mods.emplace_back(dev_tools);
-//
-//    for (auto& tool : dev_tools->get_tools()) {
-//        m_mods.emplace_back(tool);
-//    }
-//#endif
-//
-//    m_mods.emplace_back(APIProxy::get());
-//    m_mods.emplace_back(PluginLoader::get());
-//    m_mods.emplace_back(ScriptRunner::get());
-//#endif
+    m_mods.emplace_back(EngineEntry::Get());
 }
 
 std::optional<std::string> Mods::on_initialize() const {
+    std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
+
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_initialize()", mod->get_name().data());
 
@@ -84,27 +23,14 @@ std::optional<std::string> Mods::on_initialize() const {
         }
     }
 
-    utility::Config cfg{ (GOWVR::get_persistent_dir() / "gowvr_config.txt").string() };
-
-    for (auto& mod : m_mods) {
-        spdlog::info("{:s}::on_config_load()", mod->get_name().data());
-        mod->on_config_load(cfg);
-    }
-
     return std::nullopt;
 }
-
 
 std::optional<std::string> Mods::on_initialize_d3d_thread() const {
     std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
 
-    utility::Config cfg{ (GOWVR::get_persistent_dir() / "gowvr_config.txt").string() };
-
     // once here to at least setup the values
-    for (auto& mod : m_mods) {
-        spdlog::info("{:s}::on_config_load()", mod->get_name().data());
-        mod->on_config_load(cfg);
-    }
+    reload_config();
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_initialize_d3d_thread()", mod->get_name().data());
@@ -115,17 +41,23 @@ std::optional<std::string> Mods::on_initialize_d3d_thread() const {
         }
     }
 
-    for (auto& mod : m_mods) {
-        spdlog::info("{:s}::on_config_load()", mod->get_name().data());
-        mod->on_config_load(cfg);
-    }
+    reload_config();
 
     return std::nullopt;
 }
 
+void Mods::reload_config(bool set_defaults) const {
+    utility::Config cfg{ (GOWVR::get_persistent_dir() / "gowvr_config.txt").string() };
+
+    for (auto& mod : m_mods) {
+        spdlog::info("{:s}::on_config_load()", mod->get_name().data());
+        mod->on_config_load(cfg, set_defaults);
+    }
+}
+
 void Mods::on_pre_imgui_frame() const {
     for (auto& mod : m_mods) {
-//        mod->on_pre_imgui_frame();
+        mod->on_pre_imgui_frame();
     }
 }
 

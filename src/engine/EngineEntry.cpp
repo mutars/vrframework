@@ -88,10 +88,10 @@ void EngineEntry::on_draw_ui()
 
 }
 
-void EngineEntry::on_config_load(const utility::Config& cfg)
+void EngineEntry::on_config_load(const utility::Config& cfg, bool set_defaults)
 {
     for (IModValue& option : m_options) {
-        option.config_load(cfg);
+        option.config_load(cfg, set_defaults);
     }
     update(true);
 }

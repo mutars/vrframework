@@ -98,6 +98,14 @@ struct VRRuntime {
         return Error::SUCCESS;
     }
 
+    virtual bool is_depth_allowed() const {
+        return false;
+    }
+
+    virtual bool is_cylinder_layer_allowed() const {
+        return false;
+    }
+
     bool is_openxr() const {
         return this->type() == Type::OPENXR;
     }

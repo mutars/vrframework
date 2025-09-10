@@ -69,7 +69,7 @@ file(
 file(GLOB IMGUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/imguizmo/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imnodes/*.cpp
+#    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imnodes/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui/*.cpp
 )
 
@@ -118,7 +118,7 @@ target_include_directories(
     "${glm_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui"
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/imguizmo"
-    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imnodes"
+#    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imnodes"
     "${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui"
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

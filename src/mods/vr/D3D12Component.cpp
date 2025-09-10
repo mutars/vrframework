@@ -166,7 +166,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 vr->m_openxr->begin_frame();
             }
 
-            auto result = vr->m_openxr->end_frame();
+            std::vector<XrCompositionLayerBaseHeader*> dummy;
+            auto result = vr->m_openxr->end_frame(dummy);
 
             if (result == XR_ERROR_LAYER_INVALID) {
                 spdlog::info("[VR] Attempting to correct invalid layer");
@@ -174,7 +175,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 m_openxr.wait_for_all_copies();
 
                 spdlog::info("[VR] Calling xrEndFrame again");
-                result = vr->m_openxr->end_frame();
+                result = vr->m_openxr->end_frame(dummy);
             }
 
             vr->m_openxr->needs_pose_update = true;
@@ -504,13 +505,13 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     
     auto& hook = g_framework->get_d3d12_hook();
     auto device = hook->get_device();
-    auto swapchain = hook->get_swap_chain();
+    auto  lDxgiSwapChain = hook->get_swap_chain();
 
     ComPtr<ID3D12Resource> backbuffer{};
 
     // Get the existing backbuffer
     // so we can get the format and stuff.
-    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) {
+    if (FAILED(lDxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) {
         spdlog::error("[VR] Failed to get back buffer.");
         return "Failed to get back buffer.";
     }
@@ -551,7 +552,7 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
         swapchain_create_info.sampleCount = backbuffer_desc.SampleDesc.Count;
         swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
 
-        runtimes::OpenXR::Swapchain swapchain{};
+        auto& swapchain = vr->m_openxr->swapchains[i];
         swapchain.width = swapchain_create_info.width;
         swapchain.height = swapchain_create_info.height;
 
@@ -560,7 +561,6 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
             return "Failed to create swapchain.";
         }
 
-        vr->m_openxr->swapchains.push_back(swapchain);
 
         uint32_t image_count{};
         auto result = xrEnumerateSwapchainImages(swapchain.handle, 0, &image_count, nullptr);
@@ -627,10 +627,10 @@ void D3D12Component::OpenXR::destroy_swapchains() {
         }
 
         ctx.textures.clear();
+        VR::get()->m_openxr->swapchains[i] = {};
     }
 
     this->contexts.clear();
-    VR::get()->m_openxr->swapchains.clear();
 }
 
 void D3D12Component::OpenXR::copy(uint32_t swapchain_idx, ID3D12Resource* resource, D3D12_RESOURCE_STATES src_state,

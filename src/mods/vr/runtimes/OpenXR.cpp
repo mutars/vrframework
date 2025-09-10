@@ -1376,7 +1376,8 @@ XrResult OpenXR::begin_frame() {
     return result;
 }
 
-XrResult OpenXR::end_frame() {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, bool has_depth) {
+
     SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
 
@@ -1391,7 +1392,7 @@ XrResult OpenXR::end_frame() {
 
     std::vector<XrCompositionLayerBaseHeader*> layers{};
     std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
-    std::vector<XrCompositionLayerQuad> quad_layers{};
+    std::vector<XrCompositionLayerQuad> l_quad_layers{};
 
 
     // we CANT push the layers every time, it cause some layer error
@@ -1431,34 +1432,37 @@ XrResult OpenXR::end_frame() {
             layers.push_back((XrCompositionLayerBaseHeader*)&layer);
 
         } else {
-            quad_layers.resize(1);
+            l_quad_layers.resize(1);
             // Initialize quad layers for each eye
             for (size_t i = 0; i < 1; ++i) {
                 const auto& swapchain = this->swapchains[i];
                 
-                quad_layers[i] = {XR_TYPE_COMPOSITION_LAYER_QUAD};
-                quad_layers[i].next = nullptr;
-                quad_layers[i].layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-                quad_layers[i].space = this->stage_space;
-                quad_layers[i].eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+                l_quad_layers[i] = {XR_TYPE_COMPOSITION_LAYER_QUAD};
+                l_quad_layers[i].next = nullptr;
+                l_quad_layers[i].layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+                l_quad_layers[i].space = this->stage_space;
+                l_quad_layers[i].eyeVisibility = XR_EYE_VISIBILITY_BOTH;
                 
                 // Configure swapchain
-                quad_layers[i].subImage.swapchain = swapchain.handle;
-                quad_layers[i].subImage.imageRect.offset = {0, 0};
-                quad_layers[i].subImage.imageRect.extent = {(int32_t)swapchain.width, (int32_t)swapchain.height};
+                l_quad_layers[i].subImage.swapchain = swapchain.handle;
+                l_quad_layers[i].subImage.imageRect.offset = {0, 0};
+                l_quad_layers[i].subImage.imageRect.extent = {(int32_t)swapchain.width, (int32_t)swapchain.height};
                 
                 // Set pose relative to view
-                quad_layers[i].pose.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
-                quad_layers[i].pose.position = prev_pipeline->stage_views[i].pose.position;
+                l_quad_layers[i].pose.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
+                l_quad_layers[i].pose.position = prev_pipeline->stage_views[i].pose.position;
                 // Move 2m forward from eye position
-                quad_layers[i].pose.position.z -= ModSettings::g_internalSettings.quadDisplayDistance;
+                l_quad_layers[i].pose.position.z -= ModSettings::g_internalSettings.quadDisplayDistance;
                 
                 // Set size (2m wide, maintain aspect ratio)
                 float aspect_ratio = (float)swapchain.width / (float)swapchain.height;
-                quad_layers[i].size = {2.0f, 2.0f / aspect_ratio};
+                l_quad_layers[i].size = {2.0f, 2.0f / aspect_ratio};
 
-                layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad_layers[i]));
+                layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&l_quad_layers[i]));
             }
+        }
+        for(auto layer : quad_layers) {
+            layers.push_back(layer);
         }
     }
 
