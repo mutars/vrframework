@@ -5,10 +5,9 @@
 
 #include "Mods.hpp"
 
-Mods::Mods() {
-    m_mods.emplace_back(GOWVRConfig::get());
-    m_mods.emplace_back(VR::get());
-    m_mods.emplace_back(EngineEntry::Get());
+Mods::Mods(std::vector<std::shared_ptr<Mod>> mods)
+    : m_mods{std::move(mods)}
+{
 }
 
 std::optional<std::string> Mods::on_initialize() const {

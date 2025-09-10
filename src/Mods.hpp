@@ -4,7 +4,8 @@
 
 class Mods {
 public:
-    Mods();
+    Mods() = default;
+    Mods(std::vector<std::shared_ptr<Mod>> mods);
     virtual ~Mods() {}
 
     std::optional<std::string> on_initialize() const;
