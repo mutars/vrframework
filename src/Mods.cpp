@@ -1,15 +1,4 @@
-#include "mods/GOWVRConfig.hpp"
-#include "mods/VR.hpp"
-#include "engine/EngineEntry.h"
-
-
 #include "Mods.hpp"
-
-Mods::Mods() {
-    m_mods.emplace_back(GOWVRConfig::get());
-    m_mods.emplace_back(VR::get());
-    m_mods.emplace_back(EngineEntry::Get());
-}
 
 std::optional<std::string> Mods::on_initialize() const {
     std::scoped_lock _{g_framework->get_hook_monitor_mutex()};
@@ -47,7 +36,7 @@ std::optional<std::string> Mods::on_initialize_d3d_thread() const {
 }
 
 void Mods::reload_config(bool set_defaults) const {
-    utility::Config cfg{ (GOWVR::get_persistent_dir() / "gowvr_config.txt").string() };
+    utility::Config cfg{ (GOWVR::get_persistent_dir() / "vr_config.txt").string() };
 
     for (auto& mod : m_mods) {
         spdlog::info("{:s}::on_config_load()", mod->get_name().data());

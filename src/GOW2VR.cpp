@@ -439,7 +439,7 @@ void GOWVR::on_frame_d3d11() {
     if (is_init_ok) {
         // Write default config once if it doesn't exist.
         if (!std::exchange(m_created_default_cfg, true)) {
-            if (!fs::exists({utility::widen(get_persistent_dir("gowvr_config.txt").string())})) {
+            if (!fs::exists({utility::widen(get_persistent_dir("vr_config.txt").string())})) {
                 save_config();
             }
         }
@@ -549,7 +549,7 @@ void GOWVR::on_frame_d3d12() {
     if (is_init_ok) {
         // Write default config once if it doesn't exist.
         if (!std::exchange(m_created_default_cfg, true)) {
-            if (!fs::exists({utility::widen(get_persistent_dir("gowvr_config.txt").string())})) {
+            if (!fs::exists({utility::widen(get_persistent_dir("vr_config.txt").string())})) {
                 save_config();
             }
         }
@@ -1021,7 +1021,7 @@ void GOWVR::save_config() {
 
     m_wants_save_config = false;
 
-    spdlog::info("Saving config gowvr_config.txt");
+    spdlog::info("Saving config vr_config.txt");
 
     utility::Config cfg{};
 
@@ -1030,7 +1030,7 @@ void GOWVR::save_config() {
     }
 
     try {
-        if (!cfg.save((get_persistent_dir() / "gowvr_config.txt").string())) {
+        if (!cfg.save((get_persistent_dir() / "vr_config.txt").string())) {
             spdlog::error("Failed to save config");
             return;
         }

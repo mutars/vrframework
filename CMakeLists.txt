@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.27)
 
 project(
-  gow_vr
+  vr_framework
   VERSION 1.0.0
   LANGUAGES C CXX
 )

@@ -138,15 +138,15 @@
 /* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 
 #include <spdlog/spdlog.h>
-#include "REL/Relocation.h"
+//#include "REL/Relocation.h"
 #include <Windows.h>
 #include "utility/ScopeProfiler.h"
-
-namespace utility {
-    // non-owning pointer
-    template <class T, class = std::enable_if_t<std::is_pointer_v<T>>>
-    using observer = T;
-}
+//
+//namespace utility {
+//    // non-owning pointer
+//    template <class T, class = std::enable_if_t<std::is_pointer_v<T>>>
+//    using observer = T;
+//}
 
 constexpr unsigned int djb2Hash(const char* str, int index = 0)
 {
@@ -157,25 +157,3 @@ constexpr unsigned int operator"" _DJB(const char str[], size_t size)
 {
     return djb2Hash(str);
 }
-
-
-template <typename T>
-class Singleton
-{
-protected:
-    constexpr Singleton() noexcept  = default;
-    constexpr ~Singleton() noexcept = default;
-
-public:
-    constexpr Singleton(const Singleton&) = delete;
-    constexpr Singleton(Singleton&&)      = delete;
-
-    constexpr auto operator=(const Singleton&) = delete;
-    constexpr auto operator=(Singleton&&)      = delete;
-
-    static constexpr auto GetSingleton() noexcept
-    {
-        static T singleton;
-        return std::addressof(singleton);
-    }
-};
