@@ -2,13 +2,13 @@
 
 #include "Mod.hpp"
 
-class GOWVRConfig : public Mod {
+class VRConfig : public Mod {
 public:
-    static std::shared_ptr<GOWVRConfig>& get();
+    static std::shared_ptr<VRConfig>& get();
 
 public:
     std::string_view get_name() const {
-        return "GOWVRConfig";
+        return "VRConfig";
     }
 
     std::optional<std::string> on_initialize() override;

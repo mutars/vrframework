@@ -2,9 +2,7 @@
 
 #include <fstream>
 #include <imgui.h>
-//#include <imgui_internal.h>
-#include "shared/sdk/Math.hpp"
-#include "utility/REMath.hpp"
+#include "math/Math.hpp"
 #include <Xinput.h>
 #include <ModSettings.h>
 #include <utility/ScopeGuard.hpp>
@@ -12,7 +10,7 @@
 #include "utility/Memory.hpp"
 #include "utility/Module.hpp"
 #include "utility/Registry.hpp"
-#include "utils/FunctionHook.h"
+#include "memory/FunctionHook.h"
 
 #include "VR.hpp"
 

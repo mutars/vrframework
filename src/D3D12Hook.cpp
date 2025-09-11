@@ -144,7 +144,7 @@ bool D3D12Hook::hook() {
         wc.hCursor = NULL;
         wc.hbrBackground = NULL;
         wc.lpszMenuName = NULL;
-        wc.lpszClassName = TEXT("GOWVR_DX12_DUMMY");
+        wc.lpszClassName = TEXT("VR_DX12_DUMMY");
         wc.hIconSm = NULL;
 
         ::RegisterClassEx(&wc);

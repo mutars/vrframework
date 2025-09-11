@@ -13,7 +13,7 @@
 #include <wrl.h>
 
 #include "utility/Patch.hpp"
-#include "shared/sdk/Math.hpp"
+#include "math/Math.hpp"
 #include "vr/D3D11Component.hpp"
 #include "vr/D3D12Component.hpp"
 #include "vr/OverlayComponent.hpp"

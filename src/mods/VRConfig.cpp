@@ -1,16 +1,16 @@
-#include "GOWVRConfig.hpp"
+#include "VRConfig.hpp"
 #include "../Framework.hpp"
 
-std::shared_ptr<GOWVRConfig>& GOWVRConfig::get() {
-     static std::shared_ptr<GOWVRConfig> instance{std::make_shared<GOWVRConfig>()};
+std::shared_ptr<VRConfig>& VRConfig::get() {
+     static std::shared_ptr<VRConfig> instance{std::make_shared<VRConfig>()};
      return instance;
 }
 
-std::optional<std::string> GOWVRConfig::on_initialize() {
+std::optional<std::string> VRConfig::on_initialize() {
     return Mod::on_initialize();
 }
 
-void GOWVRConfig::on_draw_ui() {
+void VRConfig::on_draw_ui() {
     if (ImGui::CollapsingHeader("Configuration")) {
         ImGui::TreePush("Configuration");
 
@@ -27,13 +27,13 @@ void GOWVRConfig::on_draw_ui() {
     }
 }
 
-void GOWVRConfig::on_frame() {
+void VRConfig::on_frame() {
     if (m_show_cursor_key->is_key_down_once()) {
         m_always_show_cursor->toggle();
     }
 }
 
-void GOWVRConfig::on_config_load(const utility::Config& cfg, bool set_defaults) {
+void VRConfig::on_config_load(const utility::Config& cfg, bool set_defaults) {
     for (IModValue& option : m_options) {
         option.config_load(cfg, set_defaults);
     }
@@ -45,7 +45,7 @@ void GOWVRConfig::on_config_load(const utility::Config& cfg, bool set_defaults) 
     g_framework->set_font_size(m_font_size->value());
 }
 
-void GOWVRConfig::on_config_save(utility::Config& cfg) {
+void VRConfig::on_config_save(utility::Config& cfg) {
     for (IModValue& option : m_options) {
         option.config_save(cfg);
     }

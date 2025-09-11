@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include <_deps/directxtk12-src/Inc/DescriptorHeap.h>
+#include <../../../_deps/directxtk12-src/Inc/DescriptorHeap.h>
 
 #include "CommandContext.hpp"
 

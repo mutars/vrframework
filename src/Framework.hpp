@@ -21,7 +21,7 @@ class Mods;
 #include "D3D12Hook.hpp"
 #include "DInputHook.hpp"
 #include "WindowsMessageHook.hpp"
-#include "shared/sdk/Math.hpp"
+#include "math/Math.hpp"
 
 #ifdef GOWVR_EXPERIMENTAL
 struct SmaaSettings {
@@ -176,7 +176,7 @@ public:
     auto get_last_window_size() const { return m_last_window_size; } // GOW imgui window
 
     static const char* get_game_name() {
-        return "gow";
+        return "VRMod";
     }
 
     bool is_drawing_ui() const {

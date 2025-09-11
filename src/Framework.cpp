@@ -44,7 +44,7 @@ extern "C" {
 
 #include "ExceptionHandler.hpp"
 //#include "LicenseStrings.hpp"
-#include "mods/GOWVRConfig.hpp"
+#include "mods/VRConfig.hpp"
 //#include "mods/IntegrityCheckBypass.hpp"
 #include "Framework.hpp"
 
@@ -159,7 +159,7 @@ Framework::Framework(HMODULE module)
     auto null_sink = std::make_shared<spdlog::sinks::null_sink_mt>();
     m_logger = std::make_shared<spdlog::logger>("null_logger", null_sink);
 #else
-    m_logger = spdlog::basic_logger_mt("GOWVRFramework", (get_persistent_dir("gowvr_log.txt")).string(), true);
+    m_logger = spdlog::basic_logger_mt("VRFramework", (get_persistent_dir("vr_log.txt")).string(), true);
 #endif
 
     std::scoped_lock __{m_startup_mutex};
@@ -173,7 +173,7 @@ Framework::Framework(HMODULE module)
         spdlog::warn("Failed to write to current directory, falling back to appdata folder");
     }
 
-    spdlog::info("GOWVR entry");
+    spdlog::info("VR entry");
 
     const auto module_size = *utility::get_module_size(m_game_module);
 
@@ -229,8 +229,8 @@ Framework::Framework(HMODULE module)
                 spdlog::info("\tBuild Number: {}", os_version_info.dwBuildNumber);
                 spdlog::info("\tPlatform Id: {}", os_version_info.dwPlatformId);
 
-                spdlog::info("Disclaimer: GOWVR does not send this information to the developers or any other third party.");
-                spdlog::info("This information is only used to help with the development of GOWVR.");
+                spdlog::info("Disclaimer: VR does not send this information to the developers or any other third party.");
+                spdlog::info("This information is only used to help with the development of VR.");
             }
         } else {
             spdlog::info("RtlGetVersion() not found");
@@ -335,7 +335,7 @@ bool Framework::hook_d3d12() {
 }
 
 Framework::~Framework() {
-    spdlog::info("GOWVR shutting down...");
+    spdlog::info("VR shutting down...");
 
     m_terminating = true;
     m_d3d_monitor_thread->request_stop();
@@ -522,7 +522,7 @@ void Framework::on_frame_d3d12() {
             return;
         }
 
-        spdlog::info("GOWVR initialized");
+        spdlog::info("VR initialized");
         m_initialized = true;
         return;
     }
@@ -850,7 +850,7 @@ bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_para
         break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN: {
-        const auto menu_key = GOWVRConfig::get()->get_menu_key()->value();
+        const auto menu_key = VRConfig::get()->get_menu_key()->value();
 
         if (w_param == menu_key && !m_last_keys[w_param]) {
             std::lock_guard _{m_input_mutex};
@@ -974,13 +974,13 @@ std::filesystem::path Framework::get_persistent_dir() {
 
         static const auto exe_name = [&]() {
             const auto result = std::filesystem::path(*utility::get_module_path(utility::get_executable())).stem().string();
-            const auto dir = std::filesystem::path(app_data_path) / "GOWVR" / result;
+            const auto dir = std::filesystem::path(app_data_path) / "VR" / result;
             std::filesystem::create_directories(dir);
 
             return result;
         }();
 
-        return std::filesystem::path(app_data_path) / "GOWVR" / exe_name;
+        return std::filesystem::path(app_data_path) / "VR" / exe_name;
     };
 
     if (s_fallback_appdata) {
@@ -1052,7 +1052,7 @@ void Framework::set_draw_ui(bool state, bool should_save) {
     m_draw_ui = state;
 
     if (m_game_data_initialized) {
-        GOWVRConfig::get()->get_menu_open()->value() = state;
+        VRConfig::get()->get_menu_open()->value() = state;
     }
 
     if (state != prev_state && should_save && m_game_data_initialized) {
@@ -1094,11 +1094,11 @@ void Framework::update_fonts() {
     auto& fonts = ImGui::GetIO().Fonts;
     fonts->Clear();
 
-    // using 'gowvr_pictographic.mode' file to
+    // using 'vr_pictographic.mode' file to
     // replace '?' to most flag in WorldObjectsViewer
     ImFontConfig custom_icons{};
     custom_icons.FontDataOwnedByAtlas = false;
-    ImFont* fsload = (INVALID_FILE_ATTRIBUTES != ::GetFileAttributesA("gowvr_pictographic.mode"))
+    ImFont* fsload = (INVALID_FILE_ATTRIBUTES != ::GetFileAttributesA("vr_pictographic.mode"))
         ? fonts->AddFontFromMemoryTTF((void*)af_baidu_ptr, af_baidu_size, (float)m_font_size, &custom_icons, fonts->GetGlyphRangesChineseFull())
         : fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, (float)m_font_size);
 
@@ -1144,12 +1144,12 @@ void Framework::invalidate_device_objects() {
 void Framework::draw_ui() {
     std::lock_guard _{m_input_mutex};
 
-    ImGui::GetIO().MouseDrawCursor = m_draw_ui || GOWVRConfig::get()->is_always_show_cursor();
+    ImGui::GetIO().MouseDrawCursor = m_draw_ui || VRConfig::get()->is_always_show_cursor();
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // causes bugs with the cursor
 
     if (!m_draw_ui) {
         // remove SetCursorPos patch
-        if (!GOWVRConfig::get()->is_always_show_cursor()) {
+        if (!VRConfig::get()->is_always_show_cursor()) {
             remove_set_cursor_pos_patch();
         } else {
             patch_set_cursor_pos();
@@ -1200,7 +1200,7 @@ void Framework::draw_ui() {
     ImGui::SetNextWindowPos(ImVec2(500, 500), ImGuiCond_::ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(300, 500), ImGuiCond_::ImGuiCond_Once);
     bool is_open = true;
-    ImGui::Begin("GOWVR Options", &is_open);
+    ImGui::Begin("VR Options", &is_open);
     ImGui::Text("Default Menu Key: F11");
     ImGui::Checkbox("Transparency", &m_ui_option_transparent);
     ImGui::SameLine();
@@ -1219,10 +1219,10 @@ void Framework::draw_ui() {
     if (m_error.empty() && m_game_data_initialized) {
         m_mods->on_draw_ui();
     } else if (!m_game_data_initialized) {
-        ImGui::TextWrapped("GOWVR is currently initializing...");
+        ImGui::TextWrapped("VR is currently initializing...");
         ImGui::TextWrapped("This menu will close after initialization if you have the remember option enabled.");
     } else if (!m_error.empty()) {
-        ImGui::TextWrapped("GOWVR error: %s", m_error.c_str());
+        ImGui::TextWrapped("VR error: %s", m_error.c_str());
     }
 
     m_last_window_pos = ImGui::GetWindowPos();
@@ -1534,7 +1534,7 @@ bool Framework::initialize() {
 
         set_imgui_style();
 
-        static const auto imgui_ini = (get_persistent_dir() / "gowvr_ui.ini").string();
+        static const auto imgui_ini = (get_persistent_dir() / "vr_ui.ini").string();
         ImGui::GetIO().IniFilename = imgui_ini.c_str();
 
         if (!ImGui_ImplWin32_Init(m_wnd)) {
