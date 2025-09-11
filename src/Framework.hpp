@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <filesystem>
 
-#include <_deps/directxtk12-src/Inc/GraphicsMemory.h>
+#include <../../../_deps/directxtk12-src/Inc/GraphicsMemory.h>
 #include "mods/vr/d3d12/CommandContext.hpp"
 #include <imgui.h>
 #ifdef GOWVR_EXPERIMENTAL
@@ -89,7 +89,7 @@ extern DlssDebugInfo g_dlss_debug_info;
 
 
 // Global facilitator
-class GOWVR
+class Framework
 {
 private:
     void hook_monitor();
@@ -115,8 +115,8 @@ public:
 
 
 public:
-    GOWVR(HMODULE module);
-    virtual ~GOWVR();
+    Framework(HMODULE module);
+    virtual ~Framework();
 
     auto get_module_handle() const { return m_module; }
 
@@ -428,4 +428,4 @@ public:
 private:
 };
 
-extern std::unique_ptr<GOWVR> g_framework;
+extern std::unique_ptr<Framework> g_framework;

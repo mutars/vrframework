@@ -9,7 +9,7 @@
 #include "utility/Patch.hpp"
 
 #include "ExceptionHandler.hpp"
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 void dump_call_stack(EXCEPTION_POINTERS* exception) {
     const auto dbghelp = LoadLibraryA("dbghelp.dll");
@@ -172,7 +172,7 @@ LONG WINAPI gowvr::global_exception_handler(struct _EXCEPTION_POINTERS* ei) {
     auto dbghelp = LoadLibrary("dbghelp.dll");
 
     if (dbghelp) {
-        const auto final_path = GOWVR::get_persistent_dir("gowvr_crash.dmp").string();
+        const auto final_path = Framework::get_persistent_dir("gowvr_crash.dmp").string();
 
         spdlog::error("Attempting to write dump to {}", final_path);
 

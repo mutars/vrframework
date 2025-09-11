@@ -1,5 +1,5 @@
 #include "GOWVRConfig.hpp"
-#include "../GOW2VR.hpp"
+#include "../Framework.hpp"
 
 std::shared_ptr<GOWVRConfig>& GOWVRConfig::get() {
      static std::shared_ptr<GOWVRConfig> instance{std::make_shared<GOWVRConfig>()};

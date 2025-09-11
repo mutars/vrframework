@@ -1,7 +1,7 @@
 #include <spdlog/spdlog.h>
 #include <utility/String.hpp>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 #include "TextureContext.hpp"
 #include "CommandContext.hpp"

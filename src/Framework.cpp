@@ -22,7 +22,7 @@ extern "C" {
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 #include <ImGuizmo.h>
-#include <engine/models/ModSettings.h>
+#include <ModSettings.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 //#include <imnodes.h>
@@ -46,16 +46,16 @@ extern "C" {
 //#include "LicenseStrings.hpp"
 #include "mods/GOWVRConfig.hpp"
 //#include "mods/IntegrityCheckBypass.hpp"
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 namespace fs = std::filesystem;
 using namespace std::literals;
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-std::unique_ptr<GOWVR> g_framework{};
+std::unique_ptr<Framework> g_framework{};
 
-void GOWVR::hook_monitor() {
+void Framework::hook_monitor() {
     std::scoped_lock _{ m_hook_monitor_mutex };
 
     if (g_framework == nullptr) {
@@ -70,8 +70,8 @@ void GOWVR::hook_monitor() {
     const auto renderer_type = get_renderer_type();
 
     if (d3d11 == nullptr || d3d12 == nullptr 
-        || (renderer_type == GOWVR::RendererType::D3D11 && d3d11 != nullptr && !d3d11->is_inside_present()) 
-        || (renderer_type == GOWVR::RendererType::D3D12 && d3d12 != nullptr && !d3d12->is_inside_present()))
+        || (renderer_type == Framework::RendererType::D3D11 && d3d11 != nullptr && !d3d11->is_inside_present())
+        || (renderer_type == Framework::RendererType::D3D12 && d3d12 != nullptr && !d3d12->is_inside_present()))
     {
         // check if present time is more than 5 seconds ago
         if (now - m_last_present_time > std::chrono::seconds(5)) {
@@ -149,7 +149,7 @@ void GOWVR::hook_monitor() {
 typedef NTSTATUS (WINAPI* PFN_LdrLockLoaderLock)(ULONG Flags, ULONG *State, ULONG_PTR *Cookie);
 typedef NTSTATUS (WINAPI* PFN_LdrUnlockLoaderLock)(ULONG Flags, ULONG_PTR Cookie);
 
-GOWVR::GOWVR(HMODULE module)
+Framework::Framework(HMODULE module)
     : m_module{module}
     , m_game_module{GetModuleHandle(0)}
     {
@@ -262,7 +262,7 @@ GOWVR::GOWVR(HMODULE module)
 }
 
 
-bool GOWVR::hook_d3d11() {
+bool Framework::hook_d3d11() {
     m_d3d11_hook.reset();
     m_d3d11_hook = std::make_unique<D3D11Hook>();
     m_d3d11_hook->on_present([this](D3D11Hook& hook) { on_frame_d3d11(); });
@@ -290,7 +290,7 @@ bool GOWVR::hook_d3d11() {
     return false;
 }
 
-bool GOWVR::hook_d3d12() {
+bool Framework::hook_d3d12() {
     if (LoadLibraryA("d3d12.dll") == nullptr) {
         spdlog::info("d3d12.dll not found, user is probably running Windows 7.");
         spdlog::info("Falling back to hooking D3D11.");
@@ -334,7 +334,7 @@ bool GOWVR::hook_d3d12() {
     return false;
 }
 
-GOWVR::~GOWVR() {
+Framework::~Framework() {
     spdlog::info("GOWVR shutting down...");
 
     m_terminating = true;
@@ -360,7 +360,7 @@ GOWVR::~GOWVR() {
     }
 }
 
-void GOWVR::run_imgui_frame(bool from_present) {
+void Framework::run_imgui_frame(bool from_present) {
     std::scoped_lock _{ m_imgui_mtx };
 
     m_has_frame = false;
@@ -405,7 +405,7 @@ void GOWVR::run_imgui_frame(bool from_present) {
     }
 }
 
-void GOWVR::on_frame_d3d11() {
+void Framework::on_frame_d3d11() {
     std::scoped_lock _{ m_imgui_mtx };
 
     // spdlog::debug("on_frame (D3D11)");
@@ -490,7 +490,7 @@ void GOWVR::on_frame_d3d11() {
     }
 }
 
-void GOWVR::on_post_present_d3d11() {
+void Framework::on_post_present_d3d11() {
     if (!m_error.empty() || !m_initialized || !m_game_data_initialized) {
         if (m_last_present_time <= std::chrono::steady_clock::now()){
             m_last_present_time = std::chrono::steady_clock::now();
@@ -509,7 +509,7 @@ void GOWVR::on_post_present_d3d11() {
 }
 
 // D3D12 Draw funciton
-void GOWVR::on_frame_d3d12() {
+void Framework::on_frame_d3d12() {
     std::scoped_lock _{ m_imgui_mtx };
 
     m_renderer_type = RendererType::D3D12;
@@ -736,7 +736,7 @@ void GOWVR::on_frame_d3d12() {
     }
 }
 
-void GOWVR::on_post_present_d3d12() {
+void Framework::on_post_present_d3d12() {
     if (!m_error.empty() || !m_initialized || !m_game_data_initialized) {
         if (m_last_present_time <= std::chrono::steady_clock::now()){
             m_last_present_time = std::chrono::steady_clock::now();
@@ -761,7 +761,7 @@ void GOWVR::on_post_present_d3d12() {
     }
 }
 
-void GOWVR::on_reset() {
+void Framework::on_reset() {
     std::scoped_lock _{ m_imgui_mtx };
 
     spdlog::info("Reset!");
@@ -789,7 +789,7 @@ void GOWVR::on_reset() {
     m_initialized = false;
 }
 
-void GOWVR::patch_set_cursor_pos() {
+void Framework::patch_set_cursor_pos() {
     std::scoped_lock _{ m_patch_mtx };
 
     if (m_set_cursor_pos_patch.get() == nullptr) {
@@ -803,7 +803,7 @@ void GOWVR::patch_set_cursor_pos() {
     }
 }
 
-void GOWVR::remove_set_cursor_pos_patch() {
+void Framework::remove_set_cursor_pos_patch() {
     std::scoped_lock _{ m_patch_mtx };
 
     if (m_set_cursor_pos_patch.get() != nullptr) {
@@ -813,7 +813,7 @@ void GOWVR::remove_set_cursor_pos_patch() {
     m_set_cursor_pos_patch.reset();
 }
 
-bool GOWVR::on_clip_cursor(LPRECT* lpRect) {
+bool Framework::on_clip_cursor(LPRECT* lpRect) {
     if(m_draw_ui) {
         *lpRect = nullptr;
         return true;
@@ -821,7 +821,7 @@ bool GOWVR::on_clip_cursor(LPRECT* lpRect) {
     return false;
 }
 
-bool GOWVR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
+bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
     m_last_message_time = std::chrono::steady_clock::now();
 
     if (!m_initialized) {
@@ -955,7 +955,7 @@ bool GOWVR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
 }
 
 // this is unfortunate.
-void GOWVR::on_direct_input_keys(const std::array<uint8_t, 256>& keys) {
+void Framework::on_direct_input_keys(const std::array<uint8_t, 256>& keys) {
     /*const auto menu_key = REFrameworkConfig::get()->get_menu_key()->value();
 
     if (keys[menu_key] && m_last_keys[menu_key] == 0) {
@@ -967,7 +967,7 @@ void GOWVR::on_direct_input_keys(const std::array<uint8_t, 256>& keys) {
     m_last_keys = keys;*/
 }
 
-std::filesystem::path GOWVR::get_persistent_dir() {
+std::filesystem::path Framework::get_persistent_dir() {
     auto return_appdata_dir = []() -> std::filesystem::path {
         char app_data_path[MAX_PATH]{};
         SHGetSpecialFolderPathA(0, app_data_path, CSIDL_APPDATA, false);
@@ -1016,7 +1016,7 @@ std::filesystem::path GOWVR::get_persistent_dir() {
     return std::filesystem::path(*utility::get_module_path(utility::get_executable())).parent_path();
 }
 
-void GOWVR::save_config() {
+void Framework::save_config() {
     std::scoped_lock _{m_config_mtx};
 
     m_wants_save_config = false;
@@ -1045,7 +1045,7 @@ void GOWVR::save_config() {
     spdlog::info("Saved config");
 }
 
-void GOWVR::set_draw_ui(bool state, bool should_save) {
+void Framework::set_draw_ui(bool state, bool should_save) {
     std::scoped_lock _{m_config_mtx};
 
     bool prev_state = m_draw_ui;
@@ -1060,7 +1060,7 @@ void GOWVR::set_draw_ui(bool state, bool should_save) {
     }
 }
 
-void GOWVR::consume_input() {
+void Framework::consume_input() {
     m_mouse_delta[0] = m_accumulated_mouse_delta[0];
     m_mouse_delta[1] = m_accumulated_mouse_delta[1];
 
@@ -1068,7 +1068,7 @@ void GOWVR::consume_input() {
     m_accumulated_mouse_delta[1] = 0.0f;
 }
 
-int GOWVR::add_font(const std::filesystem::path& filepath, int size, const std::vector<ImWchar>& ranges) {
+int Framework::add_font(const std::filesystem::path& filepath, int size, const std::vector<ImWchar>& ranges) {
     // Look for a font already matching this description.
     for (int i = 0; i < m_additional_fonts.size(); ++i) {
         const auto& font = m_additional_fonts[i];
@@ -1078,13 +1078,13 @@ int GOWVR::add_font(const std::filesystem::path& filepath, int size, const std::
         }
     }
 
-    m_additional_fonts.emplace_back(GOWVR::AdditionalFont{filepath, size, ranges, (ImFont*)nullptr});
+    m_additional_fonts.emplace_back(Framework::AdditionalFont{filepath, size, ranges, (ImFont*)nullptr});
     m_fonts_need_updating = true;
 
     return m_additional_fonts.size() - 1;
 }
 
-void GOWVR::update_fonts() {
+void Framework::update_fonts() {
     if (!m_fonts_need_updating) {
         return;
     }
@@ -1127,7 +1127,7 @@ void GOWVR::update_fonts() {
     m_wants_device_object_cleanup = true;
 }
 
-void GOWVR::invalidate_device_objects() {
+void Framework::invalidate_device_objects() {
     if (!m_wants_device_object_cleanup) {
         return;
     }
@@ -1141,7 +1141,7 @@ void GOWVR::invalidate_device_objects() {
     m_wants_device_object_cleanup = false;
 }
 
-void GOWVR::draw_ui() {
+void Framework::draw_ui() {
     std::lock_guard _{m_input_mutex};
 
     ImGui::GetIO().MouseDrawCursor = m_draw_ui || GOWVRConfig::get()->is_always_show_cursor();
@@ -1243,7 +1243,7 @@ void GOWVR::draw_ui() {
     }
 }
 
-void GOWVR::draw_about() {
+void Framework::draw_about() {
     if (!ImGui::CollapsingHeader("About")) {
         return;
     }
@@ -1339,7 +1339,7 @@ void GOWVR::draw_about() {
     ImGui::TreePop();
 }
 
-void GOWVR::set_imgui_style() noexcept {
+void Framework::set_imgui_style() noexcept {
     ImGui::StyleColorsDark();
 
     auto& style = ImGui::GetStyle();
@@ -1402,7 +1402,7 @@ void GOWVR::set_imgui_style() noexcept {
     set_font_size(m_font_size);
 }
 
-bool GOWVR::initialize() {
+bool Framework::initialize() {
     if (m_initialized) {
         return true;
     }
@@ -1567,7 +1567,7 @@ bool GOWVR::initialize() {
     return true;
 }
 
-bool GOWVR::initialize_game_data() {
+bool Framework::initialize_game_data() {
     if (m_game_data_initialized || m_started_game_data_thread) {
         return true;
     }
@@ -1619,7 +1619,7 @@ bool GOWVR::initialize_game_data() {
 }
 
 
-bool GOWVR::initialize_xinput_hook() {
+bool Framework::initialize_xinput_hook() {
     if (m_first_frame || m_xinput_hook == nullptr) {
         m_xinput_hook.reset();
         m_xinput_hook = std::make_unique<XInputHook>();
@@ -1629,7 +1629,7 @@ bool GOWVR::initialize_xinput_hook() {
 }
 
 
-void GOWVR::post_message(UINT message, WPARAM w_param, LPARAM l_param) {
+void Framework::post_message(UINT message, WPARAM w_param, LPARAM l_param) {
     if (m_wnd == nullptr) {
         return;
     }
@@ -1638,7 +1638,7 @@ void GOWVR::post_message(UINT message, WPARAM w_param, LPARAM l_param) {
 }
 
 
-bool GOWVR::initialize_windows_message_hook() {
+bool Framework::initialize_windows_message_hook() {
     if (m_wnd == 0) {
         return false;
     }
@@ -1662,7 +1662,7 @@ bool GOWVR::initialize_windows_message_hook() {
 // Ran on the first valid frame after pre-initialization of mods has taken place and hasn't failed
 // This one allows mods to run any initialization code in the context of the D3D thread (like VR code)
 // It also is the one that actually loads any config files
-bool GOWVR::first_frame_initialize() {
+bool Framework::first_frame_initialize() {
     const bool is_init_ok = m_error.empty() && m_game_data_initialized;
 
     if (!is_init_ok || !m_first_frame_d3d_initialize) {
@@ -1696,7 +1696,7 @@ bool GOWVR::first_frame_initialize() {
     return true;
 }
 
-void GOWVR::call_on_frame() {
+void Framework::call_on_frame() {
     const bool is_init_ok = m_error.empty() && m_game_data_initialized;
 
     if (is_init_ok) {
@@ -1707,7 +1707,7 @@ void GOWVR::call_on_frame() {
 
 // DirectX 11 Initialization methods
 
-bool GOWVR::init_d3d11() {
+bool Framework::init_d3d11() {
     deinit_d3d11();
 
     auto swapchain = m_d3d11_hook->get_swap_chain();
@@ -1814,7 +1814,7 @@ bool GOWVR::init_d3d11() {
     return true;
 }
 
-void GOWVR::deinit_d3d11() {
+void Framework::deinit_d3d11() {
     auto bd = ImGui::GetIO().BackendRendererUserData;
     if(bd) {
         ImGui_ImplDX11_Shutdown();
@@ -1824,7 +1824,7 @@ void GOWVR::deinit_d3d11() {
 
 // DirectX 12 Initialization methods
 
-bool GOWVR::init_d3d12() {
+bool Framework::init_d3d12() {
     deinit_d3d12();
     
     auto device = m_d3d12_hook->get_device();
@@ -1997,7 +1997,7 @@ bool GOWVR::init_d3d12() {
     return true;
 }
 
-void GOWVR::deinit_d3d12() {
+void Framework::deinit_d3d12() {
     for (auto& ctx : m_d3d12.cmd_ctxs) {
         if (ctx != nullptr) {
             ctx->reset();

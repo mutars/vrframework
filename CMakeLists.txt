@@ -7,10 +7,10 @@ project(
 )
 
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
-set(CMAKE_OPTIMIZE_DEPENDENCIES ON)
+#set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+#set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
+#set(CMAKE_OPTIMIZE_DEPENDENCIES ON)
 
 include(GNUInstallDirs)
 
@@ -34,9 +34,7 @@ include("cmake/kananlib.cmake")
 include("cmake/directxtk.cmake")
 include("cmake/openxr.cmake")
 #include("cmake/streamline.cmake")
-#include("cmake/imgui.cmake")
-
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/sdk/include)
+include("cmake/imgui.cmake")
 
 
 # Add headers
@@ -47,35 +45,19 @@ file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp
 )
 
-file(GLOB IMGUI_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui/*.hpp
-)
-
 list(REMOVE_ITEM headers ${CMAKE_CURRENT_SOURCE_DIR}/include/PCH.h)
-list(APPEND headers ${IMGUI_HEADERS})
 
 
 # Add sources
 file(
   GLOB_RECURSE
   sources
+    ${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
 )
 
-file(GLOB IMGUI_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imguizmo/*.cpp
-#    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imnodes/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui/*.cpp
-)
 
-list(APPEND sources ${IMGUI_SOURCES})
-
-add_library(${PROJECT_NAME} SHARED ${headers} ${sources})
+add_library(${PROJECT_NAME} STATIC ${headers} ${sources})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -91,6 +73,7 @@ target_link_libraries("${PROJECT_NAME}" PUBLIC
         safetyhook
 #        PolyHook_2
 #        ViGEmClient
+        imgui_lib
         kananlib
         openxr_loader
         delayimp
@@ -102,11 +85,10 @@ target_link_libraries("${PROJECT_NAME}" PUBLIC
 target_include_directories(
   ${PROJECT_NAME}
   PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/src>
     $<INSTALL_INTERFACE:src>
     $<BUILD_INTERFACE:${SimpleIni_SOURCE_DIR}>
-    "extern/openvr/headers"
+    $<BUILD_INTERFACE:${SHADER_HEADER_DIR}>
     "extern/nlohmann"
 #   "${xbyak_SOURCE_DIR}/xbyak"
     "${minhook_SOURCE_DIR}/include"
@@ -116,13 +98,16 @@ target_include_directories(
     "${openxr_SOURCE_DIR}/src"
     "${spdlog_SOURCE_DIR}/src"
     "${glm_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui"
+#    "${CMAKE_CURRENT_SOURCE_DIR}/framework-imgui"
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/imguizmo"
 #    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imnodes"
-    "${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui"
+    "${DIRECTX_NAMESPACED_INCLUDE_DIR}"
   PUBLIC
+#    ${imgui_SOURCE_DIR}
+    "extern/openvr/headers"
+#    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui"
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${SHADER_HEADER_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 
 #add_compile_definitions(DEBUG_PROFILING_ENABLED)
@@ -133,11 +118,6 @@ if(POLYHOOK2_FUNCTION_HOOK)
     include("cmake/polyhook.cmake")
     target_link_libraries("${PROJECT_NAME}" PUBLIC PolyHook_2)
 endif()
-
-
-target_compile_definitions(${PROJECT_NAME} PUBLIC
-        "IMGUI_USER_CONFIG=\"${CMAKE_CURRENT_SOURCE_DIR}/gow-imgui/gow_imconfig.hpp\""
-)
 
 target_precompile_headers(
   ${PROJECT_NAME}
@@ -155,13 +135,6 @@ target_compile_options(
   ${PROJECT_NAME}
   PUBLIC
     $<$<CONFIG:Debug>:/EHa>
-)
-
-set_target_properties(
-  ${PROJECT_NAME}
-  PROPERTIES
-    LINK_FLAGS
-    "/DELAYLOAD:openvr_api.dll /DELAYLOAD:openxr_loader.dll /DELAYLOAD:d3d12.dll /DELAYLOAD:D3DCOMPILER_47.dll"
 )
 
 if(COMPILE_SHADERS)
@@ -198,67 +171,26 @@ if(COMPILE_SHADERS)
 endif()
 
 
-#add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#                  COMMAND ${CMAKE_COMMAND} -E copy ${CSO_SHADER_FILES} $<TARGET_FILE_DIR:${PROJECT_NAME}>
-#                  COMMAND_EXPAND_LISTS)
-if(HOOK_METHOD STREQUAL "dinput8")
-  set(OUTPUT_NAME "dinput8")
-elseif(HOOK_METHOD STREQUAL "dxgi")
-  set(OUTPUT_NAME "dxgi")
-  add_compile_definitions(USE_DXGI_HOOK)
-elseif(HOOK_METHOD STREQUAL "PHYSX")
-  set(OUTPUT_NAME "PhysX3Cooking_x64")
-  add_compile_definitions(USE_PHYSX_HOOK)
-endif()
-
 if(SIGNATURE_SCAN)
   add_compile_definitions(SIGNATURE_SCAN)
 endif()
 
 #add_compile_definitions(GOWR_DEMO_MODE)
 
+#
+#install(
+#  TARGETS ${PROJECT_NAME}
+#  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#)
 
-install(
-  TARGETS ${PROJECT_NAME}
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-if(CMAKE_BUILD_TYPE STREQUAL Debug)
-  set(BUILD_NAME Debug)
-else()
-  set(BUILD_NAME Release)
-endif()
-
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${OUTPUT_NAME})
-
-add_custom_command(
-  TARGET ${PROJECT_NAME}
-  POST_BUILD
-  COMMAND
-    ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/artifact/Mod${BUILD_NAME}/gowvr
-  COMMAND
-    ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/artifact/Mod${BUILD_NAME}/gowvr
-  COMMAND
-#    ${CMAKE_COMMAND} -E copy $<TARGET_PDB_FILE:${PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/artifact/Mod${BUILD_NAME}/gowrvr
-#[[  COMMAND
-    ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Config/${PROJECT_NAME}.ini ${CMAKE_CURRENT_SOURCE_DIR}/artifact/Mod${BUILD_NAME}/gowrvr]]
-#   COMMAND
-#    ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> "C:\\Program Files (x86)\\Steam\\steamapps\\common\\God of War Ragnarök\\Data\\Plugins"
-#  COMMAND
-#    ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> "C:\\Program Files (x86)\\Steam\\steamapps\\common\\God of War Ragnarök\\$<TARGET_FILE_NAME:${PROJECT_NAME}>"
-  #COMMAND
-  #  ${CMAKE_COMMAND} -E copy $<TARGET_PDB_FILE:${PROJECT_NAME}> "C:\\Program Files (x86)\\Steam\\steamapps\\common\\God of War Ragnarök\\gowrvr.pdb"
-)
-
-add_custom_command(
-        TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND
-       ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> "C:\\Program Files (x86)\\Steam\\steamapps\\common\\GodOfWar\\$<TARGET_FILE_NAME:${PROJECT_NAME}>"
-)
+#if(CMAKE_BUILD_TYPE STREQUAL Debug)
+#  set(BUILD_NAME Debug)
+#else()
+#  set(BUILD_NAME Release)
+#endif()
 
 
-file(GLOB_RECURSE OUTPUT_DLLS ${CMAKE_CURRENT_SOURCE_DIR}/artifact/*.dll)
+#file(GLOB_RECURSE OUTPUT_DLLS ${CMAKE_CURRENT_SOURCE_DIR}/artifact/*.dll)
 #file(GLOB_RECURSE OUTPUT_PDBS ${CMAKE_CURRENT_SOURCE_DIR}/artifact/*.pdb)
 
 set_property(

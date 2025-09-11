@@ -6,7 +6,7 @@
 #include "shared/sdk/Math.hpp"
 #include "utility/REMath.hpp"
 #include <Xinput.h>
-#include <engine/models/ModSettings.h>
+#include <ModSettings.h>
 #include <utility/ScopeGuard.hpp>
 
 #include "utility/Memory.hpp"
@@ -215,7 +215,7 @@ std::optional<std::string> VR::initialize_openvr() {
 }
 
 std::optional<std::string> VR::initialize_openvr_input() {
-    const auto module_directory = GOWVR::get_persistent_dir();
+    const auto module_directory = Framework::get_persistent_dir();
 
     // write default actions and bindings with the static strings we have
     for (auto& it : m_binding_files) {
@@ -930,7 +930,7 @@ void VR::on_present() {
         }
     }
 
-    if (renderer == GOWVR::RendererType::D3D11) {
+    if (renderer == Framework::RendererType::D3D11) {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
             runtime->synchronize_frame();
@@ -939,7 +939,7 @@ void VR::on_present() {
 
         m_is_d3d12 = false;
         e = m_d3d11.on_frame(this);
-    } else if (renderer == GOWVR::RendererType::D3D12) {
+    } else if (renderer == Framework::RendererType::D3D12) {
         m_is_d3d12 = true;
 //        spdlog::info("Copying frame to D3D12 texture f={}", m_presenter_frame_count % 2 == m_left_eye_interval ? "left" : "right");
         e = m_d3d12.on_frame(this);
@@ -978,7 +978,7 @@ void VR::on_post_present() {
 
     const auto renderer = g_framework->get_renderer_type();
 
-    if (renderer == GOWVR::RendererType::D3D12) {
+    if (renderer == Framework::RendererType::D3D12) {
         m_d3d12.on_post_present(this);
     }
 
@@ -1042,7 +1042,7 @@ void VR::on_begin_rendering(void* entry) {
 //    on_wait_rendering(entry);
     if ((m_render_frame_count)% 2 == m_left_eye_interval) {
         if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-            if (g_framework->get_renderer_type() == GOWVR::RendererType::D3D11) {
+            if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
                 if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
                     return;
                 }
@@ -1216,7 +1216,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
         static std::chrono::steady_clock::time_point m_last_grip_click = std::chrono::steady_clock::now();
         if(std::chrono::steady_clock::now() - m_last_grip_click > std::chrono::milliseconds(500)) {
             m_last_grip_click                           = std::chrono::steady_clock::now();
-            ModSettings::g_game_state.setEnforceFlatScreen(!ModSettings::g_game_state.enforceFlatScreen);
+//            ModSettings::g_game_state.setEnforceFlatScreen(!ModSettings::g_game_state.enforceFlatScreen);
         }
     }
 

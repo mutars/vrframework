@@ -1,8 +1,8 @@
 #include <glm/gtx/intersect.hpp>
 #include <imgui_internal.h>
 
-#include "GOW2VR.hpp"
 #include "../VR.hpp"
+#include "Framework.hpp"
 #include "utility/ImGui.hpp"
 
 #include "OverlayComponent.hpp"
@@ -259,7 +259,7 @@ void OverlayComponent::update_input_openvr() {
     io.MouseWheel = 0;
     io.MouseWheelH = 0;
 
-    const auto is_d3d11 = g_framework->get_renderer_type() == GOWVR::RendererType::D3D11;
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
 
     const auto last_window_pos = g_framework->get_last_window_pos();
     const auto last_window_size = g_framework->get_last_window_size();
@@ -400,7 +400,7 @@ bool OverlayComponent::update_wrist_overlay_openvr() {
         return true;
     }
 
-    const auto is_d3d11 = g_framework->get_renderer_type() == GOWVR::RendererType::D3D11;
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
 
     // update REFramework menu overlay
     const auto last_window_pos = g_framework->get_last_window_pos();
@@ -612,7 +612,7 @@ void OverlayComponent::update_overlay_openvr() {
 
     auto& vr = VR::get();
 
-    const auto is_d3d11 = g_framework->get_renderer_type() == GOWVR::RendererType::D3D11;
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
 
     bool should_show_overlay = update_wrist_overlay_openvr();
 
@@ -710,7 +710,7 @@ void OverlayComponent::update_overlay_openvr() {
         const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
         vr::VROverlay()->SetOverlayTransformAbsolute(m_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
 
-        const auto is_d3d12 = g_framework->get_renderer_type() == GOWVR::RendererType::D3D12;
+        const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
         const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
         const auto aspect = size.x / size.y;
         const auto size_meters = g_framework->is_drawing_ui() ? m_framework_size->value() : m_slate_size->value();

@@ -1,6 +1,6 @@
 #include <spdlog/spdlog.h>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 #include "ResourceCopier.hpp"
 

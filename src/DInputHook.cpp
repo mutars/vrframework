@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include "DInputHook.hpp"
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 using namespace std;
 

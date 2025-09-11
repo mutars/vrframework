@@ -5,8 +5,8 @@
 #include <openvr.h>
 #include <wrl.h>
 
-#include <_deps/directxtk-src/Inc/SpriteBatch.h>
-#include "PostProcess.h"
+#include <../../../_deps/directxtk-src/Inc/SpriteBatch.h>
+#include <../../../_deps/directxtk-src/Inc/PostProcess.h>
 
 
 #define XR_USE_PLATFORM_WIN32

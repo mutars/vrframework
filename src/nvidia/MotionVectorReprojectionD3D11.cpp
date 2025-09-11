@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h> // Assuming you use spdlog
 
 // You need to provide these dependencies from your project
-#include <engine/models/ModSettings.h>
+//#include <ModSettings.h>
 #include <mods/VR.hpp>
 
 // This header should contain the compiled compute shader bytecode

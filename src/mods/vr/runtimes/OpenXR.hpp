@@ -12,7 +12,7 @@
 #define XR_USE_GRAPHICS_API_D3D12
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
-#include <common/xr_linear.h>
+//#include <common/xr_linear.h>
 
 #include "VRRuntime.hpp"
 

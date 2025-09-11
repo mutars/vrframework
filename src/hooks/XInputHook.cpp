@@ -5,7 +5,7 @@
 
 #include <SafetyHook.hpp>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 #include "Mods.hpp"
 #include "XInputHook.hpp"
 

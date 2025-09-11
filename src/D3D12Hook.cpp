@@ -8,7 +8,7 @@
 #include <utility/Module.hpp>
 #include <utility/Thread.hpp>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 #include "WindowFilter.hpp"
 

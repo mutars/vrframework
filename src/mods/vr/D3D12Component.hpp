@@ -9,8 +9,8 @@
 #include <mutex>
 #include <wrl.h>
 
-#include <_deps/directxtk12-src/Inc/GraphicsMemory.h>
-#include <_deps/directxtk12-src/Inc/SpriteBatch.h>
+#include <../../../_deps/directxtk12-src/Inc/GraphicsMemory.h>
+#include <../../../_deps/directxtk12-src/Inc/SpriteBatch.h>
 
 #include "mods/vr/d3d12/ResourceCopier.hpp"
 #include "mods/vr/d3d12/TextureContext.hpp"

@@ -4,10 +4,10 @@
 
 #include <imgui.h>
 #include <json.hpp>
-#include <engine/models/ModSettings.h>
+#include <ModSettings.h>
 #include <utility/String.hpp>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 #include "OpenXR.hpp"
 
@@ -754,7 +754,7 @@ std::optional<std::string> OpenXR::initialize_actions(const std::string& json_st
         // replace the slashes with underscores
         std::replace(filename.begin(), filename.end(), '/', '_');
 
-        filename = (GOWVR::get_persistent_dir() / filename).string();
+        filename = (Framework::get_persistent_dir() / filename).string();
 
         // check if the file exists
         if (std::filesystem::exists(filename)) {

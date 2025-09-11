@@ -5,7 +5,7 @@
 
 #include <openvr.h>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 #include "WindowFilter.hpp"
 

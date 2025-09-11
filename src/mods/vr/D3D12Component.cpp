@@ -3,11 +3,11 @@
 
 #include "mods/VR.hpp"
 
-#include <_deps/directxtk12-src/Inc/RenderTargetState.h>
-#include <_deps/directxtk12-src/Inc/ResourceUploadBatch.h>
+#include <../../../_deps/directxtk12-src/Inc/RenderTargetState.h>
+#include <../../../_deps/directxtk12-src/Inc/ResourceUploadBatch.h>
 
 #include "D3D12Component.hpp"
-#include <_deps/directxtk12-src/Src/d3dx12.h>
+#include <../../../_deps/directxtk12-src/Src/d3dx12.h>
 #include <d3dcompiler.h>
 
 typedef HRESULT(WINAPI* PFN_D3D12_GET_DEBUG_INTERFACE)(REFIID, void**);

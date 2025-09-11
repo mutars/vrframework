@@ -18,7 +18,7 @@
 //#include <sdk/UGameEngine.hpp>
 //#include <sdk/FViewportInfo.hpp>
 
-#include "GOW2VR.hpp"
+#include "Framework.hpp"
 
 class IModValue {
 public:
