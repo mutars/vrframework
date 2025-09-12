@@ -225,6 +225,10 @@ public:
         return get_d3d12_rt_size();
     }
 
+    void enable_engine_thread() {
+        m_has_engine_thread = true;
+    }
+
 private:
         void save_config();
     void consume_input();
@@ -324,6 +328,7 @@ private:
 
     bool m_sent_message{false};
     bool m_message_hook_requested{false};
+    bool m_has_engine_thread{false};
 
     RendererType m_renderer_type{RendererType::D3D11};
 
@@ -416,7 +421,7 @@ private: // D3D12 members
         uint32_t rt_height{};
 
         std::array<void*, 2> imgui_backend_datas{};
-        std::unique_ptr<DirectX::DX12::GraphicsMemory> graphics_memory{}; // for use in several places around REF
+//        std::unique_ptr<DirectX::DX12::GraphicsMemory> graphics_memory{}; // for use in several places around REF
     } m_d3d12{};
 
 public:

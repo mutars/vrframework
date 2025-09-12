@@ -110,10 +110,23 @@ private:
             std::scoped_lock _{this->mtx};
 
             for (auto& ctx : this->contexts) {
+                if(ctx.swapchain_index < 0) {
+                    continue;
+                }
                 for (auto& texture_ctx : ctx.texture_contexts) {
                     texture_ctx->commands.wait(INFINITE);
                 }
             }
+        }
+
+        bool ever_acquired(uint32_t swapchain_idx) {
+            std::scoped_lock _{this->mtx};
+            for(auto& ctx : contexts) {
+                if (ctx.swapchain_index == swapchain_idx) {
+                    return ctx.ever_acquired;
+                }
+            }
+            return false;
         }
 
         XrGraphicsBindingD3D12KHR binding{XR_TYPE_GRAPHICS_BINDING_D3D12_KHR};
@@ -122,6 +135,8 @@ private:
             std::vector<XrSwapchainImageD3D12KHR> textures{};
             std::vector<std::unique_ptr<d3d12::TextureContext>> texture_contexts{};
             uint32_t num_textures_acquired{0};
+            int swapchain_index{-1};
+            bool ever_acquired{false};
         };
 
         std::vector<SwapchainContext> contexts{};

@@ -1,17 +1,15 @@
 #pragma once
-#ifdef DXGI_INJECTION
-//#include "D3D12Hook.hpp"
-#include <Dxgi1_3.h>
+#ifdef USE_DXGI_HOOK
+#include <dxgi1_3.h>
+#include <dxgi1_4.h>
 #include <dxgi.h>
-//#include <interceptors/D3D12DeviceHook.h>
-//#include <interceptors/DXGIFactory.h>
-//#include <interceptors/PixInjector.h>
-#include <windows.h>
+//#include <string>
 
-HMODULE g_dxgi = 0;
-HMODULE g_d3d12 = 0;
+// Inline to avoid ODR violations when this header is included in multiple TUs
+inline HMODULE g_dxgi = nullptr;
 
-bool load_dxgi()
+// Inline to avoid multiple definitions across translation units
+inline bool load_dxgi()
 {
     if (g_dxgi) {
         return true;
@@ -21,7 +19,6 @@ bool load_dxgi()
     if (GetSystemDirectoryW(buffer, MAX_PATH) != 0) {
         // Load the original dinput8.dll
         if ((g_dxgi = LoadLibraryW((std::wstring{ buffer } + L"\\dxgi.dll").c_str())) == NULL) {
-            spdlog::error("Failed to load dxgi.dll");
             return false;
         }
 
@@ -29,127 +26,73 @@ bool load_dxgi()
     }
     return false;
 }
-
-typedef HRESULT(WINAPI* ID3D12Device_CreateDevice)(_In_opt_ IUnknown*, D3D_FEATURE_LEVEL, _In_ REFIID, _COM_Outptr_opt_ void**);
-ID3D12Device_CreateDevice pCreateD3DDevice = nullptr; //original function pointer after hook
-ID3D12Device_CreateDevice pCreateD3DDeviceOrig = nullptr; //original function pointer after hook
-
-
-HRESULT WINAPI d3d12_CreateDevice(_In_opt_ IUnknown* pAdapter,
-                                  D3D_FEATURE_LEVEL MinimumFeatureLevel,
-                                  _In_ REFIID riid, // Expected: ID3D12Device
-                                  _COM_Outptr_opt_ void** ppDevice) {
-    auto result = pCreateD3DDevice(pAdapter, MinimumFeatureLevel, riid, ppDevice);
-    //hook detourCreateCommittedResource from ppDevice
-    if (SUCCEEDED(result)) {
-        spdlog::info("ID3D12Device created hooking");
-//        ID3D12Device_Hook(riid, ppDevice);
+inline HMODULE get_dxgi()
+{
+    if (!g_dxgi) {
+        load_dxgi();
     }
-    return result;
+    return g_dxgi;
 }
 
-//bool hook_d3d12()
-//{
-//    if(g_d3d12)
-//    {
-//        return true;
-//    }
-//    while ((g_d3d12 = GetModuleHandle("d3d12")) == NULL) {
-//        Sleep(50);
-//    }
-//    auto status = MH_CreateHookApiEx(L"d3d12", "D3D12CreateDevice", &d3d12_CreateDevice, reinterpret_cast<void**>(&pCreateD3DDevice), reinterpret_cast<void**>(&pCreateD3DDeviceOrig));
-//    if (status != MH_OK) {
-//        spdlog::error("Failed to hook D3D12CreateDevice: {}", status);
-//        return false;
-//    }
+//#pragma comment(linker, "/EXPORT:CompatValue=dxgi.CompatValue,DATA")
+//#pragma comment(linker, "/EXPORT:CompatString=dxgi.CompatString,DATA")
+// --- Main Function Exports ---
+//#pragma comment(linker, "/EXPORT:CreateDXGIFactory=dxgi.CreateDXGIFactory")
+//#pragma comment(linker, "/EXPORT:CreateDXGIFactory1=dxgi.CreateDXGIFactory1")
+//#pragma comment(linker, "/EXPORT:CreateDXGIFactory2=dxgi.CreateDXGIFactory2")
+//#pragma comment(linker, "/EXPORT:DXGID3D10CreateDevice=dxgi.DXGID3D10CreateDevice")
+//#pragma comment(linker, "/EXPORT:DXGID3D10CreateLayeredDevice=dxgi.DXGID3D10CreateLayeredDevice")
+//#pragma comment(linker, "/EXPORT:DXGID3D10GetImageBlockSize=dxgi.DXGID3D10GetImageBlockSize")
+//#pragma comment(linker, "/EXPORT:DXGID3D10RegisterLayers=dxgi.DXGID3D10RegisterLayers")
+//#pragma comment(linker, "/EXPORT:DXGIDeclareAdapterRemovalSupport=dxgi.DXGIDeclareAdapterRemovalSupport")
+//#pragma comment(linker, "/EXPORT:DXGIGetDebugInterface=dxgi.DXGIGetDebugInterface")
+//#pragma comment(linker, "/EXPORT:DXGIGetDebugInterface1=dxgi.DXGIGetDebugInterface1")
+//#pragma comment(linker, "/EXPORT:DXGIReportAdapterConfiguration=dxgi.DXGIReportAdapterConfiguration")
+
+// --- Other/Legacy Function Exports ---
+//#pragma comment(linker, "/EXPORT:ApplyCompatResolution=dxgi.ApplyCompatResolution")
+//#pragma comment(linker, "/EXPORT:DXGICancelPresents=dxgi.DXGICancelPresents")
+//#pragma comment(linker, "/EXPORT:DXGIRevertToSxS=dxgi.DXGIRevertToSxS")
+//#pragma comment(linker, "/EXPORT:DXGISetAppCompatStringPointer=dxgi.DXGISetAppCompatStringPointer")
+//#pragma comment(linker, "/EXPORT:OpenAdapter10=dxgi.OpenAdapter10")
+//#pragma comment(linker, "/EXPORT:OpenAdapter10_2=dxgi.OpenAdapter10_2")
+//#pragma comment(linker, "/EXPORT:SetAppCompatStringPointer=dxgi.SetAppCompatStringPointer")
 //
-//    status = MH_EnableHook(pCreateD3DDeviceOrig);
-//
-//    if (status != MH_OK) {
-//        spdlog::error("Failed to hook D3D12CreateDevice: {}", status);
-//        return false;
-//    }
-//    spdlog::info("Hooked D3D12CreateDevice");
-//    return true;
-//}
 
-extern "C"
+#define IMPLEMENT_PROXY_FORWARD(originalFunctionName, ...) \
+    spdlog::info("{} proxy called", #originalFunctionName);\
+    static auto dxgi = get_dxgi();                                                       \
+    if(!dxgi) return E_FAIL; \
+    using FnT = decltype(&originalFunctionName); \
+    static auto original_fn = (FnT)GetProcAddress(dxgi, #originalFunctionName); \
+    if (!original_fn) return E_FAIL; \
+    return original_fn(__VA_ARGS__);
+
+#pragma comment(linker, "/EXPORT:CreateDXGIFactory=PX_CreateDXGIFactory")
+extern "C" __declspec(dllexport) HRESULT WINAPI PX_CreateDXGIFactory(REFIID riid, _COM_Outptr_ void** ppFactory)
 {
-    // CreateDXGIFactory wrapper for dxgi.dll
-    __declspec(dllexport) HRESULT WINAPI dxgi_create_factory(REFIID riid, _COM_Outptr_ void** ppFactory)
-    {
-        // This needs to be done because when we include dinput.h in DInputHook,
-        // It is a redefinition, so we assign an export by not using the original name
-#pragma comment(linker, "/EXPORT:CreateDXGIFactory=dxgi_create_factory")
-
-        load_dxgi();
-        static auto original_fn =  ((decltype(CreateDXGIFactory)*)GetProcAddress(g_dxgi, "CreateDXGIFactory"));
-        auto result =  original_fn(riid, ppFactory);
-        spdlog::debug("CreateDXGIFactory called from proxy");
-        /*if (SUCCEEDED(result)) {
-            IDXGIFactory1* pFactory = reinterpret_cast<IDXGIFactory1*>(*ppFactory);
-            IDXGIFactory1_Hook(pFactory);
-        }*/
-        return result;
-    }
+    IMPLEMENT_PROXY_FORWARD(CreateDXGIFactory, riid, ppFactory);
 }
 
-extern "C"
-{
-    // CreateDXGIFactory1 wrapper for dxgi.dll
-    __declspec(dllexport) HRESULT WINAPI dxgi_create_factory1(REFIID riid, _COM_Outptr_ void** ppFactory)
-    {
-        // This needs to be done because when we include dinput.h in DInputHook,
-        // It is a redefinition, so we assign an export by not using the original name
-#pragma comment(linker, "/EXPORT:CreateDXGIFactory1=dxgi_create_factory1")
 
-        load_dxgi();
-        static auto original_fn = ((decltype(CreateDXGIFactory1)*)GetProcAddress(g_dxgi, "CreateDXGIFactory1"));
-        auto result = original_fn(riid, ppFactory);
-        spdlog::debug("CreateDXGIFactory1 called from proxy");
-        /*if (SUCCEEDED(result)) {
-            IDXGIFactory1* pFactory1 = reinterpret_cast<IDXGIFactory1*>(*ppFactory);
-            IDXGIFactory1_Hook(pFactory1);
-        }*/
-        return result;
-    }
+#pragma comment(linker, "/EXPORT:CreateDXGIFactory1=PX_CreateDXGIFactory1")
+extern "C" __declspec(dllexport) HRESULT WINAPI PX_CreateDXGIFactory1(REFIID riid, _COM_Outptr_ void** ppFactory)
+{
+    IMPLEMENT_PROXY_FORWARD(CreateDXGIFactory1, riid, ppFactory);
 }
 
-extern "C"
-{
-    // CreateDXGIFactory2 wrapper for dxgi.dll
-    __declspec(dllexport) HRESULT WINAPI dxgi_create_factory2(UINT Flags, REFIID riid, _COM_Outptr_ void** ppFactory)
-    {
-        // This needs to be done because when we include dinput.h in DInputHook,
-        // It is a redefinition, so we assign an export by not using the original name
-#pragma comment(linker, "/EXPORT:CreateDXGIFactory2=dxgi_create_factory2")
 
-        load_dxgi();
-//        WindowsDebug::init();
-        auto static original_fn = ((decltype(CreateDXGIFactory2)*)GetProcAddress(g_dxgi, "CreateDXGIFactory2"));
-        auto result = original_fn(Flags, riid, ppFactory);
-        spdlog::debug("CreateDXGIFactory2 called from proxy");
-        /*if (SUCCEEDED(result)) {
-             D3D12Hook::hook_swapchain(reinterpret_cast<IDXGIFactory2*>(*ppFactory));
-            IDXGIFactory2** pFactory2 = reinterpret_cast<IDXGIFactory2**>(ppFactory);
-            IDXGIFactory2_Hook(*pFactory2);
-        }*/
-        return result;
-    }
+#pragma comment(linker, "/EXPORT:CreateDXGIFactory2=PX_CreateDXGIFactory2")
+extern "C" __declspec(dllexport) HRESULT WINAPI PX_CreateDXGIFactory2(UINT Flags, REFIID riid, _COM_Outptr_ void **ppFactory)
+{
+    IMPLEMENT_PROXY_FORWARD(CreateDXGIFactory2, Flags, riid, ppFactory);
 }
 
-extern "C"
+#pragma comment(linker, "/EXPORT:DXGIGetDebugInterface1=PX_DXGIGetDebugInterface1")
+extern "C" __declspec(dllexport) HRESULT WINAPI PX_DXGIGetDebugInterface1(UINT Flags, REFIID riid, _COM_Outptr_ void **pDebug)
 {
-    // DXGIGetDebugInterface1 wrapper for dxgi.dll
-    __declspec(dllexport) HRESULT WINAPI dxgi_get_debug_interface(UINT Flags, REFIID riid, _COM_Outptr_ void** ppFactory)
-    {
-        // This needs to be done because when we include dinput.h in DInputHook,
-        // It is a redefinition, so we assign an export by not using the original name
-#pragma comment(linker, "/EXPORT:DXGIGetDebugInterface1=dxgi_get_debug_interface")
-
-        load_dxgi();
-        static auto original_fn = ((decltype(DXGIGetDebugInterface1)*)GetProcAddress(g_dxgi, "DXGIGetDebugInterface1"));
-        return original_fn(Flags, riid, ppFactory);
-    }
+    IMPLEMENT_PROXY_FORWARD(DXGIGetDebugInterface1, Flags, riid, pDebug);
 }
+
+// All other exports are forwarded directly above; keep one example wrapper below.
 #endif
