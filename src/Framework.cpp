@@ -784,13 +784,75 @@ void Framework::remove_set_cursor_pos_patch() {
     m_set_cursor_pos_patch.reset();
 }
 
-bool Framework::on_clip_cursor(LPRECT* lpRect) {
+
+void Framework::on_screen_to_client(auto result, auto wnd, auto point) {
+    static auto vr = VR::get();
+
+    if (wnd == m_wnd && vr->is_hmd_active() && *result == TRUE) {
+        RECT real_client_rect{};
+        if (WindowsMessageHook::GetClientRectOriginal(wnd, &real_client_rect)) {
+            const float real_width = static_cast<float>(real_client_rect.right - real_client_rect.left);
+            const float real_height = static_cast<float>(real_client_rect.bottom - real_client_rect.top);
+
+            if (real_width > 0 && real_height > 0) {
+                const float virtual_width = static_cast<float>(vr->get_hmd_width());
+                const float virtual_height = static_cast<float>(vr->get_hmd_height());
+
+                const float scale_x = virtual_width / real_width;
+                const float scale_y = virtual_height / real_height;
+
+                point->x = static_cast<LONG>(static_cast<float>(point->x) * scale_x);
+                point->y = static_cast<LONG>(static_cast<float>(point->y) * scale_y);
+            }
+        }
+    }
+}
+
+
+bool Framework::on_clip_cursor(auto lpRect) {
     if(m_draw_ui) {
         *lpRect = nullptr;
         return true;
     }
-    return false;
+    return true;
 }
+
+void Framework::on_get_window_rect(auto result, auto wnd, auto rect) {
+    static auto vr = VR::get();
+    if(wnd == m_wnd && vr->is_hmd_active()) {
+        int width = vr->get_hmd_width();
+        int height = vr->get_hmd_height();
+        RECT clientRect;
+        WindowsMessageHook::GetClientRectOriginal(wnd, &clientRect);
+        int origWidth = clientRect.right - clientRect.left;
+        int origHeight = clientRect.bottom - clientRect.top;
+        rect->right = rect->right - origWidth + width;
+        rect->bottom = rect->bottom - origHeight + height;
+    }
+}
+
+void Framework::on_get_client_rect(auto result, auto wnd, auto rect) {
+    static auto vr = VR::get();
+    if(wnd == m_wnd && vr->is_hmd_active()) {
+        int width = vr->get_hmd_width();
+        int height = vr->get_hmd_height();
+        rect->right = rect->left + width;
+        rect->bottom = rect->top + height;
+    }
+}
+
+void Framework::on_adjust_window_rect(auto result, auto wnd, auto rect, auto menu) {
+    static auto vr = VR::get();
+//    if(wnd == m_wnd && vr->is_hmd_active()) {
+//        int width = vr->get_hmd_width();
+//        int height = vr->get_hmd_height();
+//        rect->right = rect->left + width;
+//        rect->bottom = rect->top + height;
+//    }
+}
+
+
+
 
 bool Framework::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
     m_last_message_time = std::chrono::steady_clock::now();
@@ -1117,6 +1179,20 @@ void Framework::draw_ui() {
 
     ImGui::GetIO().MouseDrawCursor = m_draw_ui || VRConfig::get()->is_always_show_cursor();
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // causes bugs with the cursor
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+    static bool joy_combo_pressed = false;
+    const bool both_sticks_clicked = ImGui::IsKeyDown(ImGuiKey_GamepadL3) && ImGui::IsKeyDown(ImGuiKey_GamepadR3);
+
+    if (both_sticks_clicked && !joy_combo_pressed)
+    {
+        m_draw_ui = !m_draw_ui;
+        joy_combo_pressed = true;
+    }
+    else if (!both_sticks_clicked)
+    {
+        joy_combo_pressed = false;
+    }
 
     if (!m_draw_ui) {
         // remove SetCursorPos patch
@@ -1621,6 +1697,21 @@ bool Framework::initialize_windows_message_hook() {
         m_windows_message_hook->on_message = [this](auto wnd, auto msg, auto w_param, auto l_param) {
             return on_message(wnd, msg, w_param, l_param);
         };
+        m_windows_message_hook->on_get_window_rect = [this](auto result, auto hWnd, auto rect) {
+            on_get_window_rect(result, hWnd, rect);
+        };
+        m_windows_message_hook->on_get_client_rect = [this](auto result, auto hWnd, auto rect) {
+            on_get_client_rect(result, hWnd, rect);
+        };
+        m_windows_message_hook->on_adjust_window_rect = [this](auto result, auto wnd, auto rect, auto menu) {
+            on_adjust_window_rect(result, wnd, rect, menu);
+        };
+        m_windows_message_hook->on_clip_cursor = [this](auto rect) {
+            return on_clip_cursor(rect);
+        };
+        m_windows_message_hook->on_screen_to_client = [this](auto result, auto hWnd, auto point) {
+            on_screen_to_client(result, hWnd, point);
+        };
 
         m_message_hook_requested = false;
         return true;
@@ -1762,24 +1853,6 @@ bool Framework::init_d3d11() {
     if (!ImGui_ImplDX11_Init(device, context.Get())) {
         spdlog::error("[D3D11] Failed to initialize ImGui.");
         return false;
-    }
-
-    {
-        ImGuiIO& io = ImGui::GetIO();
-
-        // Get your window and swapchain dimensions
-        RECT windowRect;
-        ::GetClientRect(m_wnd, &windowRect);
-        float windowWidth = static_cast<float>(windowRect.right - windowRect.left);
-        float windowHeight = static_cast<float>(windowRect.bottom - windowRect.top);
-
-        float textureWidth = backbuffer_desc.Width;
-        float textureHeight = backbuffer_desc.Height;
-
-        float scaleX = textureWidth / windowWidth;
-        float scaleY = textureHeight / windowHeight;
-
-        io.DisplayFramebufferScale = ImVec2(scaleX, scaleY);
     }
 
     return true;
@@ -1971,23 +2044,6 @@ bool Framework::init_d3d12() {
         return false;
     }
 
-    {
-        ImGuiIO& io = ImGui::GetIO();
-
-        // Get your window and swapchain dimensions
-        RECT windowRect;
-        ::GetClientRect(m_wnd, &windowRect);
-        float windowWidth = static_cast<float>(windowRect.right - windowRect.left);
-        float windowHeight = static_cast<float>(windowRect.bottom - windowRect.top);
-
-        float textureWidth = swapchain_desc.BufferDesc.Width;
-        float textureHeight = swapchain_desc.BufferDesc.Height;
-
-        float scaleX = textureWidth / windowWidth;
-        float scaleY = textureHeight / windowHeight;
-
-        io.DisplayFramebufferScale = ImVec2(scaleX, scaleY);
-    }
 
 
     m_d3d12.imgui_backend_datas[1] = ImGui::GetIO().BackendRendererUserData;

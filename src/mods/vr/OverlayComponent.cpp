@@ -194,35 +194,35 @@ void OverlayComponent::on_config_load(const utility::Config& cfg, bool set_defau
 void OverlayComponent::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("Overlay Options")) {
-        if (VR::get()->get_runtime()->is_cylinder_layer_allowed()) {
-            m_slate_overlay_type->draw("Overlay Type");
+//        if (VR::get()->get_runtime()->is_cylinder_layer_allowed()) {
+//            m_slate_overlay_type->draw("Overlay Type");
+//
+//            if ((OverlayType)m_slate_overlay_type->value() == OverlayType::CYLINDER)  {
+//                m_slate_cylinder_angle->draw("UI Cylinder Angle");
+//            }
+//        }
+//
+//        float ui_offset[] { m_slate_x_offset->value(), m_slate_y_offset->value(), m_slate_distance->value() };
+//
+//        if (ImGui::SliderFloat3("UI Offset", ui_offset, -10.0f, 10.0f)) {
+//            m_slate_x_offset->value() = ui_offset[0];
+//            m_slate_y_offset->value() = ui_offset[1];
+//            m_slate_distance->value() = ui_offset[2];
+//        }
 
-            if ((OverlayType)m_slate_overlay_type->value() == OverlayType::CYLINDER)  {
-                m_slate_cylinder_angle->draw("UI Cylinder Angle");
-            }
-        }
-
-        float ui_offset[] { m_slate_x_offset->value(), m_slate_y_offset->value(), m_slate_distance->value() };
-
-        if (ImGui::SliderFloat3("UI Offset", ui_offset, -10.0f, 10.0f)) {
-            m_slate_x_offset->value() = ui_offset[0];
-            m_slate_y_offset->value() = ui_offset[1];
-            m_slate_distance->value() = ui_offset[2];
-        }
-
-        m_slate_distance->draw("UI Distance");
-        m_slate_size->draw("UI Size");
-        m_ui_follows_view->draw("UI Follows View");
-        ImGui::SameLine();
-        m_ui_invert_alpha->draw("UI Invert Alpha");
+//        m_slate_distance->draw("UI Distance");
+//        m_slate_size->draw("UI Size");
+//        m_ui_follows_view->draw("UI Follows View");
+//        ImGui::SameLine();
+//        m_ui_invert_alpha->draw("UI Invert Alpha");
 
         m_framework_distance->draw("Framework Distance");
         m_framework_size->draw("Framework Size");
         m_framework_ui_follows_view->draw("Framework Follows View");
-        if (VR::get()->get_runtime()->is_openvr()) {
-            ImGui::SameLine();
-            m_framework_wrist_ui->draw("Framework Wrist UI");
-        }
+//        if (VR::get()->get_runtime()->is_openvr()) {
+//            ImGui::SameLine();
+//            m_framework_wrist_ui->draw("Framework Wrist UI");
+//        }
         m_framework_mouse_emulation->draw("Framework Mouse Emulation");
         ImGui::TreePop();
     }

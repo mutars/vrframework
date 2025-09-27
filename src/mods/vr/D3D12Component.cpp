@@ -549,6 +549,9 @@ std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
     this->contexts.clear();
     this->contexts.resize(5);
 
+    backbuffer_desc.Width = vr->get_hmd_width();
+    backbuffer_desc.Height = vr->get_hmd_height();
+
     auto create_swapchain = [&](uint32_t swapchainIndex, int format, int width, int height) -> std::optional<std::string> {
         spdlog::info("[VR] Creating swapchain for eye {}", swapchainIndex);
         spdlog::info("[VR] Width: {}", width);

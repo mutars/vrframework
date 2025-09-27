@@ -148,7 +148,6 @@ public:
 
     bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param);
     void post_message(UINT message, WPARAM w_param, LPARAM l_param);
-    bool on_clip_cursor(LPRECT* lpRect);
     void on_direct_input_keys(const std::array<uint8_t, 256>& keys);
 
     static inline bool s_fallback_appdata{false};
@@ -431,6 +430,12 @@ public:
     auto get_rendertarget_height_d3d12() { return m_d3d12.rt_height; }
 
 private:
+    void on_get_window_rect(auto result, auto wnd, auto rect);
+    void on_get_client_rect(auto result, auto wnd, auto rect);
+    void on_adjust_window_rect(auto result, auto wnd, auto rect, auto menu);
+    bool on_clip_cursor(auto lpRect);
+    void on_screen_to_client(auto result, auto wnd, auto point);
+
 };
 
 extern std::unique_ptr<Framework> g_framework;

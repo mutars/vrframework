@@ -6,6 +6,7 @@
 #include "utility/Thread.hpp"
 
 #include "WindowsMessageHook.hpp"
+#include <SafetyHook.hpp>
 
 using namespace std;
 
@@ -54,6 +55,35 @@ WindowsMessageHook::WindowsMessageHook(HWND wnd)
     // Set it to our "hook" procedure.
     SetWindowLongPtr(m_wnd, GWLP_WNDPROC, (LONG_PTR)&window_proc);
 
+    auto get_window_rect_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "GetWindowRect");
+    m_get_window_rect_hook = safetyhook::create_inline((void*)get_window_rect_fn, onGetWindowRect);
+    if (!m_get_window_rect_hook) {
+        spdlog::error("Failed to hook GetWindowRect");
+    }
+
+    auto get_client_rect_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "GetClientRect");
+    m_get_client_rect_hook = safetyhook::create_inline((void*)get_client_rect_fn, onGetClientRect);
+    if (!m_get_client_rect_hook) {
+        spdlog::error("Failed to hook GetClientRect");
+    }
+
+    auto adjust_window_rect_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "AdjustWindowRect");
+    m_adjust_client_rect_hook = safetyhook::create_inline((void*)adjust_window_rect_fn, onAdjustWindowRect);
+    if (!m_adjust_client_rect_hook) {
+        spdlog::error("Failed to hook AdjustWindowRect");
+    }
+
+    auto screen_to_client_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "ScreenToClient");
+    m_screen_to_client_hook = safetyhook::create_inline((void*)screen_to_client_fn, onScreenToClient);
+    if (!m_screen_to_client_hook) {
+        spdlog::error("Failed to hook ScreenToClient");
+    }
+
+    auto clip_cursor_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "ClipCursor");
+    m_clip_cursor_hook = safetyhook::create_inline((void*)clip_cursor_fn, onClipCursor);
+    if (!m_clip_cursor_hook) {
+        spdlog::error("Failed to hook ClipCursor");
+    }
     spdlog::info("Hooked Windows message handler");
 }
 
@@ -94,4 +124,89 @@ bool WindowsMessageHook::is_hook_intact() {
     }
 
     return GetWindowLongPtr(m_wnd, GWLP_WNDPROC) == (LONG_PTR)&window_proc;
+}
+
+BOOL WindowsMessageHook::onGetClientRect(HWND hWnd, LPRECT lpRect)
+{
+    auto on_get_client_rect = g_windows_message_hook->on_get_client_rect;
+
+    auto result =  g_windows_message_hook->m_get_client_rect_hook.call<BOOL>(hWnd, lpRect);
+    if(on_get_client_rect) {
+        on_get_client_rect(&result, hWnd, lpRect);
+    }
+    return result;
+}
+
+BOOL WindowsMessageHook::onGetWindowRect(HWND hWnd, LPRECT lpRect)
+{
+    auto result = g_windows_message_hook->m_get_window_rect_hook.call<BOOL>(hWnd, lpRect);
+    auto on_get_window_rect = g_windows_message_hook->on_get_window_rect;
+    if(on_get_window_rect) {
+        on_get_window_rect(&result, hWnd, lpRect);
+    }
+    return result;
+}
+
+BOOL WindowsMessageHook::onAdjustWindowRect(LPRECT lpRect, DWORD dwStyle, BOOL bMenu)
+{
+    auto on_adjust_window_rect = g_windows_message_hook->on_adjust_window_rect;
+    auto result = g_windows_message_hook->m_adjust_client_rect_hook.call<BOOL>(lpRect, dwStyle, bMenu);
+    if(on_adjust_window_rect) {
+        on_adjust_window_rect(&result, g_windows_message_hook->m_wnd, lpRect, bMenu);
+    }
+    return result;
+}
+
+BOOL WindowsMessageHook::onScreenToClient(HWND hWnd, LPPOINT lpPoint)
+{
+    auto on_screen_to_client = g_windows_message_hook->on_screen_to_client;
+
+    auto result = g_windows_message_hook->m_screen_to_client_hook.call<BOOL>(hWnd, lpPoint);
+
+    if (on_screen_to_client) {
+        on_screen_to_client(&result, hWnd, lpPoint);
+    }
+
+    return result;
+}
+
+BOOL WindowsMessageHook::onClipCursor(LPRECT lpRect)
+{
+    auto on_clip_cursor = g_windows_message_hook->on_clip_cursor;
+    if (on_clip_cursor) {
+        on_clip_cursor(&lpRect);
+    }
+    return g_windows_message_hook->m_clip_cursor_hook.call<BOOL>(lpRect);
+}
+
+BOOL WindowsMessageHook::GetClientRectOriginal(HWND hWnd, LPRECT lpRect)
+{
+    if(!g_windows_message_hook || !g_windows_message_hook->m_get_client_rect_hook) {
+        return ::GetClientRect(hWnd, lpRect);
+    }
+    return g_windows_message_hook->m_get_client_rect_hook.call<BOOL>(hWnd, lpRect);
+}
+
+BOOL WindowsMessageHook::GetWindowRectOriginal(HWND hWnd, LPRECT lpRect)
+{
+    if(!g_windows_message_hook || !g_windows_message_hook->m_get_window_rect_hook) {
+        return ::GetWindowRect(hWnd, lpRect);
+    }
+    return g_windows_message_hook->m_get_window_rect_hook.call<BOOL>(hWnd, lpRect);
+}
+
+BOOL WindowsMessageHook::ScreenToClientOriginal(HWND hWnd, LPPOINT lpPoint)
+{
+    if (!g_windows_message_hook || !g_windows_message_hook->m_screen_to_client_hook) {
+        return ::ScreenToClient(hWnd, lpPoint);
+    }
+    return g_windows_message_hook->m_screen_to_client_hook.call<BOOL>(hWnd, lpPoint);
+}
+
+BOOL WindowsMessageHook::ClipCursorOriginal(RECT* lpRect)
+{
+    if (!g_windows_message_hook || !g_windows_message_hook->m_clip_cursor_hook) {
+        return ::ClipCursor(lpRect);
+    }
+    return g_windows_message_hook->m_clip_cursor_hook.call<BOOL>(lpRect);
 }

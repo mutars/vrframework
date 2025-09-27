@@ -1022,10 +1022,6 @@ void VR::on_engine_tick(void* entry) {
     if (!runtime->loaded) {
         return;
     }
-
-    if ((m_engine_frame_count) % 2 == m_left_eye_interval) {
-        update_hmd_state();
-    }
 }
 
 void VR::on_begin_rendering(void* entry) {
@@ -1053,6 +1049,10 @@ void VR::on_begin_rendering(void* entry) {
                 return;
             }
         }
+    }
+
+    if ((m_engine_frame_count) % 2 == m_left_eye_interval) {
+        update_hmd_state();
     }
 
 }
@@ -1431,12 +1431,12 @@ void VR::on_draw_ui() {
     if (ImGui::Button("Set Standing Height")) {
         m_standing_origin.y = get_position(0).y;
     }
-
+*/
 
 
     if (ImGui::Button("Recenter View") || m_recenter_view_key->is_key_down_once()) {
         recenter_view();
-    }*/
+    }
 
     if (ImGui::Button("Reinitialize Runtime")) {
         get_runtime()->wants_reinitialize = true;
@@ -1448,7 +1448,7 @@ void VR::on_draw_ui() {
     ImGui::Separator();
 
     m_set_standing_key->draw("Set Standing Origin Key");
-//    m_recenter_view_key->draw("Recenter View Key");
+    m_recenter_view_key->draw("Recenter View Key");
 
     ImGui::Separator();
 

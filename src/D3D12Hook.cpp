@@ -320,13 +320,24 @@ bool D3D12Hook::hook() {
 
         auto& present_fn = (*(void***)swap_chain)[8]; // Present
         m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D12Hook::present);
-        auto& set_render_targets_fn = (*(void***)cmd_list)[46];
-        m_set_render_targets_hook = std::make_unique<PointerHook>(&set_render_targets_fn, (void*)&D3D12Hook::set_render_targets);
+//        auto& set_render_targets_fn = (*(void***)cmd_list)[46];
+//        auto Barriers = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ResourceBarrier);
+//        spdlog::info("ResourceBarrier offset: {}", Barriers);
+//        auto ExecuteIndirectOff = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ExecuteIndirect);
+//        m_commandlist_hook = std::make_unique<VtableHook>(cmd_list);
+//        m_commandlist_hook->hook_method(59, (uintptr_t)&D3D12Hook::execute_indirect);
+//        m_commandlist_hook->hook_method(14, (uintptr_t)&D3D12Hook::dispatch);
+//        spdlog::info("Dispatch offset: 14, ExecuteIndirect offset: 59");
+        // we hook Dispatch and ExecuteIndirect because they are called after SetRenderTargets
+//        m_set_render_targets_hook = std::make_unique<PointerHook>(&set_render_targets_fn, (void*)&D3D12Hook::set_render_targets);
+//        m_commandlist_dispatch_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[14], (void*)&D3D12Hook::dispatch);
+//        m_commandlist_execute_indirect_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[59], (void*)&D3D12Hook::execute_indirect);
+//        m_commandlist_resource_barriers_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[Barriers], (void*)&D3D12Hook::resource_barriers);
 
-        auto& create_commited_resource_fn = (*(void***)device)[27];
-        m_create_commited_resource_hook = std::make_unique<PointerHook>(&create_commited_resource_fn, (void*)&D3D12Hook::create_committed_resource);
-        auto& create_depth_stencil_view_fn = (*(void***)device)[21];
-        m_create_depth_stencil_view_hook = std::make_unique<PointerHook>(&create_depth_stencil_view_fn, (void*)&D3D12Hook::create_depth_stencil_view);
+//        auto& create_commited_resource_fn = (*(void***)device)[27];
+//        m_create_commited_resource_hook = std::make_unique<PointerHook>(&create_commited_resource_fn, (void*)&D3D12Hook::create_committed_resource);
+//        auto& create_depth_stencil_view_fn = (*(void***)device)[21];
+//        m_create_depth_stencil_view_hook = std::make_unique<PointerHook>(&create_depth_stencil_view_fn, (void*)&D3D12Hook::create_depth_stencil_view);
 
         m_hooked = true;
     } catch (const std::exception& e) {
@@ -738,6 +749,26 @@ HRESULT D3D12Hook::create_committed_resource(ID3D12Device* device, const D3D12_H
 
     return result;
 }
+//
+//void D3D12Hook::dispatch(ID3D12GraphicsCommandList* cmd_list, UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ) {
+//    auto d3d12 = g_d3d12_hook;
+//    auto dispatch_original_fn = d3d12->m_commandlist_dispatch_hook->get_original<decltype(D3D12Hook::dispatch)*>();
+//    dispatch_original_fn(cmd_list, ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+//}
+//
+//void D3D12Hook::execute_indirect(ID3D12GraphicsCommandList* cmd_list, ID3D12CommandSignature* pCommandSignature, UINT MaxCommandCount, ID3D12Resource* pArgumentBuffer,
+//                                 UINT64 ArgumentBufferOffset, ID3D12Resource* pCountBuffer, UINT64 CountBufferOffset)
+//{
+//    auto d3d12 = g_d3d12_hook;
+//    auto execute_indirect_original_fn = d3d12->m_commandlist_execute_indirect_hook->get_original<decltype(D3D12Hook::execute_indirect)*>();
+//    execute_indirect_original_fn(cmd_list, pCommandSignature, MaxCommandCount, pArgumentBuffer, ArgumentBufferOffset, pCountBuffer, CountBufferOffset);
+//}
+//
+//void D3D12Hook::resource_barriers(ID3D12GraphicsCommandList* cmd_list, UINT NumBarriers, const D3D12_RESOURCE_BARRIER* pBarriers) {
+//    auto d3d12 = g_d3d12_hook;
+//    auto resource_barriers_original_fn = d3d12->m_commandlist_resource_barriers_hook->get_original<decltype(D3D12Hook::resource_barriers)*>();
+//    resource_barriers_original_fn(cmd_list, NumBarriers, pBarriers);
+//}
 
 /*HRESULT WINAPI D3D12Hook::create_swap_chain(IDXGIFactory4* factory, IUnknown* device, HWND hwnd, const DXGI_SWAP_CHAIN_DESC* desc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* p_fullscreen_desc, IDXGIOutput* p_restrict_to_output, IDXGISwapChain** swap_chain)
 {

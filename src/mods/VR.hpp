@@ -670,7 +670,7 @@ private:
 
     ValueList m_options{
         *m_set_standing_key,
-//        *m_recenter_view_key,
+        *m_recenter_view_key,
 //        *m_decoupled_pitch,
 //        *m_use_afr,
 //        *m_use_custom_view_distance,
