@@ -125,8 +125,8 @@ protected:
                                                         D3D12_CPU_DESCRIPTOR_HANDLE* depth_stencil_descriptor);
 //    static void STDMETHODCALLTYPE    dispatch(ID3D12GraphicsCommandList* cmd_list, _In_ UINT ThreadGroupCountX, _In_ UINT ThreadGroupCountY, UINT ThreadGroupCountZ);
 //    static void STDMETHODCALLTYPE    execute_indirect(ID3D12GraphicsCommandList* cmd_list, _In_ ID3D12CommandSignature* pCommandSignature, _In_ UINT MaxCommandCount,
-                                                      _In_ ID3D12Resource* pArgumentBuffer, _In_ UINT64 ArgumentBufferOffset, _In_opt_ ID3D12Resource* pCountBuffer,
-                                                      _In_ UINT64 CountBufferOffset);
+//                                                      _In_ ID3D12Resource* pArgumentBuffer, _In_ UINT64 ArgumentBufferOffset, _In_opt_ ID3D12Resource* pCountBuffer,
+//                                                      _In_ UINT64 CountBufferOffset);
 //    static void STDMETHODCALLTYPE    resource_barriers(ID3D12GraphicsCommandList* cmd_list, _In_ UINT NumBarriers, _In_reads_(NumBarriers) const D3D12_RESOURCE_BARRIER* pBarriers);
     static void STDMETHODCALLTYPE    create_depth_stencil_view(ID3D12Device* device, ID3D12Resource* pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC* pDesc,
                                                                D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor);
