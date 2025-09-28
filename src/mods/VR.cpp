@@ -1416,7 +1416,8 @@ void VR::on_draw_ui() {
             ImGui::TreePop();
         }
 
-        if (!m_resolution_scale->draw("Resolution Scale")) {
+        m_resolution_scale->draw("Resolution Scale");
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
             m_openxr->resolution_scale = m_resolution_scale->value();
         }
     }
