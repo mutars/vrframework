@@ -1244,8 +1244,8 @@ void Framework::draw_ui() {
         m_windows_message_hook->window_toggle_cursor(true);
     }
 
-    ImGui::SetNextWindowPos(ImVec2(500, 500), ImGuiCond_::ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(300, 500), ImGuiCond_::ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(1000, 1000), ImGuiCond_::ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(300, 500), ImGuiCond_::ImGuiCond_FirstUseEver);
     bool is_open = true;
     ImGui::Begin("VR Options", &is_open);
     ImGui::Text("Default Menu Key: F11");
