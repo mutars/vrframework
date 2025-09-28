@@ -1855,6 +1855,24 @@ bool Framework::init_d3d11() {
         return false;
     }
 
+    {
+        ImGuiIO& io = ImGui::GetIO();
+
+        // Get your window and swapchain dimensions
+        RECT windowRect;
+        ::GetClientRect(m_wnd, &windowRect);
+        auto windowWidth = static_cast<float>(windowRect.right - windowRect.left);
+        auto windowHeight = static_cast<float>(windowRect.bottom - windowRect.top);
+
+        auto textureWidth = (float ) backbuffer_desc.Width;
+        auto textureHeight = (float) backbuffer_desc.Height;
+
+        float scaleX = textureWidth / windowWidth;
+        float scaleY = textureHeight / windowHeight;
+
+        io.DisplayFramebufferScale = ImVec2(scaleX, scaleY);
+    }
+
     return true;
 }
 
@@ -2042,6 +2060,24 @@ bool Framework::init_d3d12() {
     if (!ImGui_ImplDX12_Init(&init_info_vr)) {
         spdlog::error("[D3D12] Failed to initialize ImGui.");
         return false;
+    }
+
+    {
+        ImGuiIO& io = ImGui::GetIO();
+
+        // Get your window and swapchain dimensions
+        RECT windowRect;
+        ::GetClientRect(m_wnd, &windowRect);
+        auto windowWidth = static_cast<float>(windowRect.right - windowRect.left);
+        auto windowHeight = static_cast<float>(windowRect.bottom - windowRect.top);
+
+        auto textureWidth = (float)swapchain_desc.BufferDesc.Width;
+        auto textureHeight = (float)swapchain_desc.BufferDesc.Height;
+
+        float scaleX = textureWidth / windowWidth;
+        float scaleY = textureHeight / windowHeight;
+
+        io.DisplayFramebufferScale = ImVec2(scaleX, scaleY);
     }
 
 
