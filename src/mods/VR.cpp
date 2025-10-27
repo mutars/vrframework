@@ -1422,7 +1422,10 @@ void VR::on_draw_ui() {
         }
     }
 
-    ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+//    ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
+    if(m_sync_interval->draw("Sync Interval")) {
+        *(int*)&get_runtime()->custom_stage = m_sync_interval->value();
+    }
     ImGui::Separator();
 
     if (ImGui::Button("Set Standing Origin") || m_set_standing_key->is_key_down_once()) {
@@ -1548,6 +1551,9 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
 
         m_openxr->resolution_scale = m_resolution_scale->value();
         initialize_openxr_swapchains();
+    }
+    if(get_runtime()->loaded) {
+        *(int*)&get_runtime()->custom_stage = m_sync_interval->value();
     }
     m_overlay_component.on_config_load(cfg, set_defaults);
 

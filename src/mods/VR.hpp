@@ -630,6 +630,14 @@ private:
         { "bindings_knuckles.json", bindings_knuckles }
     };
 
+    inline static const std::vector<std::string> s_sync_interval_options {
+        "Early",
+        "Late",
+        "VeryLate"
+    };
+
+    const ModCombo::Ptr m_sync_interval{ ModCombo::create(generate_name("SyncInterval"), s_sync_interval_options, 0) };
+
     const ModKey::Ptr m_set_standing_key{ ModKey::create(generate_name("SetStandingOriginKey")) };
     const ModKey::Ptr m_recenter_view_key{ ModKey::create(generate_name("RecenterViewKey")) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
@@ -693,6 +701,7 @@ private:
         *m_resolution_scale,
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
+        *m_sync_interval,
 //        *m_enable_asynchronous_rendering
     };
 

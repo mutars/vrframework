@@ -1398,9 +1398,14 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
     int current_frame = internal_frame_counter % QUEUE_SIZE;
-//    int prev_frame = internal_frame_counter > 0 ? ((internal_frame_counter - 1) % QUEUE_SIZE): current_frame;
+    int prev_frame = internal_frame_counter > 0 ? ((internal_frame_counter - 1) % QUEUE_SIZE): current_frame;
     auto current_pipeline = &this->pipeline_states[current_frame];
-//    auto prev_pipeline = &this->pipeline_states[prev_frame];
+    auto prev_pipeline = &this->pipeline_states[prev_frame];
+#ifndef MOD_OPENXR_ONE_FRAME_OFF
+    auto reference_pipeline = current_pipeline;
+#else
+    auto reference_pipeline = prev_pipeline;
+#endif
     if (current_pipeline->frame_state.shouldRender == XR_TRUE) {
         projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         if (!ModSettings::g_internalSettings.showQuadDisplay) {
@@ -1408,8 +1413,8 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 const auto& swapchain = this->swapchains[i];
     
                 projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-                projection_layer_views[i].pose = current_pipeline->stage_views[i].pose;
-                projection_layer_views[i].fov = current_pipeline->stage_views[i].fov;
+                projection_layer_views[i].pose = reference_pipeline->stage_views[i].pose;
+                projection_layer_views[i].fov = reference_pipeline->stage_views[i].fov;
                 projection_layer_views[i].subImage.swapchain = swapchain.handle;
                 int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
                 int texture_area_width = swapchain.width;
@@ -1450,7 +1455,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 
                 // Set pose relative to view
                 l_quad_layers[i].pose.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
-                l_quad_layers[i].pose.position = current_pipeline->stage_views[i].pose.position;
+                l_quad_layers[i].pose.position = reference_pipeline->stage_views[i].pose.position;
                 // Move 2m forward from eye position
                 l_quad_layers[i].pose.position.z -= ModSettings::g_internalSettings.quadDisplayDistance;
                 

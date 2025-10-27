@@ -168,7 +168,11 @@ public:
 
 public: 
     // OpenXR specific fields
-    double prediction_scale{.0};
+#ifndef MOD_OPENXR_ONE_FRAME_OFF
+    double prediction_scale{0.0};
+#else
+    double prediction_scale{1.0};
+#endif
     bool session_ready{false};
     bool frame_began{false};
     bool frame_synced{false};
