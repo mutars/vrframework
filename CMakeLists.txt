@@ -14,6 +14,9 @@ set(CMAKE_CXX_STANDARD 23)
 
 include(GNUInstallDirs)
 
+# Streamline version configuration
+set(STREAMLINE_VERSION "v2.4.15" CACHE STRING "Version of NVIDIA Streamline to use")
+
 #add_compile_definitions(GLM_FORCE_LEFT_HANDED)
 
 # CPM
@@ -33,7 +36,7 @@ include("cmake/safetyhook.cmake")
 include("cmake/kananlib.cmake")
 include("cmake/directxtk.cmake")
 include("cmake/openxr.cmake")
-#include("cmake/streamline.cmake")
+include("cmake/streamline.cmake")
 include("cmake/imgui.cmake")
 
 
@@ -88,13 +91,11 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/src>
     $<INSTALL_INTERFACE:src>
     $<BUILD_INTERFACE:${SimpleIni_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${SHADER_HEADER_DIR}>
     "extern/nlohmann"
 #   "${xbyak_SOURCE_DIR}/xbyak"
     "${minhook_SOURCE_DIR}/include"
     "${vigemclient_SOURCE_DIR}/include"
     "${minhook_SOURCE_DIR}/src/hde"
-    # "${CMAKE_CURRENT_SOURCE_DIR}/extern/Streamline/include"
     "${openxr_SOURCE_DIR}/src"
     "${spdlog_SOURCE_DIR}/src"
     "${glm_SOURCE_DIR}"
@@ -106,6 +107,7 @@ target_include_directories(
 #    ${imgui_SOURCE_DIR}
     "extern/openvr/headers"
 #    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui"
+    $<BUILD_INTERFACE:${streamline_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
@@ -168,6 +170,11 @@ if(COMPILE_SHADERS)
   endforeach(FILE)
 
   add_dependencies(${PROJECT_NAME} shaders)
+  target_include_directories(
+          ${PROJECT_NAME}
+          PRIVATE
+          $<BUILD_INTERFACE:${SHADER_HEADER_DIR}>
+  )
 endif()
 
 

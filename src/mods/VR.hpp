@@ -204,38 +204,6 @@ public:
     Matrix4x4f get_transform(uint32_t index) const;
     vr::HmdMatrix34_t get_raw_transform(uint32_t index) const;
 
-    static const int MATRIX_HISTORY_SIZE = 6;
-    struct MatrixHistory {
-        glm::mat4 projection[MATRIX_HISTORY_SIZE]{};
-        glm::mat4 hmd_view[MATRIX_HISTORY_SIZE]{};
-        glm::mat4 eye_view[MATRIX_HISTORY_SIZE]{};
-        MatrixHistory() {
-            const glm::mat4 identity(1.0f);
-            std::fill(std::begin(projection), std::end(projection), identity);
-            std::fill(std::begin(hmd_view), std::end(hmd_view), identity);
-            std::fill(std::begin(eye_view), std::end(eye_view), identity);
-        }
-        ~MatrixHistory() = default;
-        inline void submit_projection(const glm::mat4& proj, int frame) {
-            projection[frame % MATRIX_HISTORY_SIZE] = proj;
-        }
-        inline void submit_hmd_view(const glm::mat4& view, int frame) {
-            hmd_view[frame % MATRIX_HISTORY_SIZE] = view;
-        }
-        inline void submit_eye_view(const glm::mat4& view, int frame) {
-            eye_view[frame % MATRIX_HISTORY_SIZE] = view;
-        }
-        inline auto get_projection(int frame) const {
-            return projection[frame % MATRIX_HISTORY_SIZE];
-        }
-        inline auto get_hmd_view(int frame) const {
-            return hmd_view[frame % MATRIX_HISTORY_SIZE];
-        }
-        inline auto get_eye_view(int frame) const {
-            return eye_view[frame % MATRIX_HISTORY_SIZE];
-        }
-    } m_views{};
-
     const auto& get_eyes() const {
         return get_runtime()->eyes;
     }
@@ -426,7 +394,9 @@ private:
 
     bool detect_controllers();
     bool is_any_action_down();
+public:
     void update_hmd_state();
+private:
     void update_camera(); // if not in firstperson mode
     void update_camera_origin(); // every frame
     void update_audio_camera();

@@ -323,21 +323,7 @@ void D3D12Component::setup() {
         if (!m_backbuffer_copy.setup(device, backbuffer_copy.Get(), std::nullopt, std::nullopt)) {
                 spdlog::error("[VR] Error setting up backbuffer copy texture RTV/SRV.");
             }
-        }
-#ifdef GOWVR_EXPERIMENTAL
-
-    if(m_fxaa_enabled) {
-        if(!m_fxaa.setup(device, backbuffer_desc)) {
-            spdlog::error("[VR] Error setting up AA backbuffer copy texture RTV/SRV.");
-        }
     }
-
-    if(m_ssaa_enabled) {
-        if(!m_ssaa.setup(device, backbuffer_desc)) {
-            spdlog::error("[VR] Error setting up SSAA backbuffer copy texture RTV/SRV.");
-        }
-    }
-#endif
 
     auto rt_desc = backbuffer_desc;
 
@@ -395,14 +381,6 @@ void D3D12Component::setup() {
     }
 
     setup_sprite_batch_pso(rt_desc.Format);
-#ifdef GOWVR_EXPERIMENTAL
-    if(m_ssaa_enabled) {
-        rt_desc = m_ssaa.m_render_target.texture->GetDesc();
-    }
-    else if(m_fxaa_enabled) {
-        rt_desc = m_fxaa.m_render_target.texture->GetDesc();
-    }
-#endif
 
     m_backbuffer_size[0] = rt_desc.Width;
     m_backbuffer_size[1] = rt_desc.Height;

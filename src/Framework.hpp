@@ -7,9 +7,6 @@
 #include <../../../_deps/directxtk12-src/Inc/GraphicsMemory.h>
 #include "mods/vr/d3d12/CommandContext.hpp"
 #include <imgui.h>
-#ifdef GOWVR_EXPERIMENTAL
-#include <mods/SMAA.h>
-#endif
 
 #include <hooks/XInputHook.hpp>
 #include <spdlog/spdlog.h>
@@ -23,69 +20,6 @@ class Mods;
 #include "WindowsMessageHook.hpp"
 #include "math/Math.hpp"
 
-#ifdef GOWVR_EXPERIMENTAL
-struct SmaaSettings {
-    bool enabled{ false};
-    int edgeDetectionMethod{1};
-    bool predication{false};
-    int debugOutput{0};
-};
-
-struct DlssSettings {
-    bool enabled{ false};
-    int debugOutput{0};
-};
-
-struct TaaSettings {
-    bool enabled{ false};
-    int debugOutput{-1};
-    int debugOutput2{-1};
-    float gamma{2.0};
-    float contrast{1.0};
-    float temperature{2.0f};
-    float exposure{0.2f};
-};
-
-struct DlssDebugInfo {
-    bool enabled{true};
-    bool cameraShake{false};
-    int motionVectorIndex{0};
-    Matrix4x4f currentProjectionMatrix;
-    Matrix4x4f previousProjectionMatrix;
-    Vector4f currentCameraPosition;
-    Vector4f previousCameraPosition;
-};
-
-struct SmaaConstants {
-    float     gContrastFactor{2.0};
-    float     gThreshold{0.01};
-    float     gDepthThreshold{0.001};
-    float     gPredicationThreshold{0.01};
-    float     gPredicationScale{5.0}; // 1-5
-    float     gPredicationStrength{0.4}; // 0-1
-    int32_t   gMaxSearchSteps{112};
-    int32_t   gMaxSearchStepsDiag{20};
-    int32_t   gCornerRounding{25};
-    float     gNearPlane{1.0};
-    float     gFarPlane{1000.0};
-};
-
-struct DlssConstants {
-    XMFLOAT4 texSize{2108.0, 2108.0, 1/2108.0, 1/2108.0};
-    XMFLOAT2 mvecScale{-0.5,0.5};
-    XMFLOAT4X4 clipToPrevClip{};
-};
-
-extern SmaaConstants g_smaa_constants;
-extern SmaaSettings g_smaa_settings;
-
-extern DlssConstants g_dlss_constants;
-extern DlssSettings g_dlss_settings;
-
-extern TaaSettings g_taa_settings;
-
-extern DlssDebugInfo g_dlss_debug_info;
-#endif
 
 
 // Global facilitator
@@ -363,9 +297,6 @@ public:
     auto get_overlay_height_d3d11() const { return m_d3d11.rt_height; }
 
 private: // D3D12 members
-#ifdef GOWVR_EXPERIMENTAL
-    SMAA m_smaa{};
-#endif
 
     struct D3D12 {
         std::vector<std::unique_ptr<d3d12::CommandContext>> cmd_ctxs{};

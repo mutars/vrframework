@@ -26,9 +26,11 @@ extern "C" {
 #include <imgui.h>
 #include <imgui_internal.h>
 //#include <imnodes.h>
-//#include <nvidia/MotionVectorReprojection.h>
-#ifdef _DEBUG
-//#include <nvidia/ShaderDebugOverlay.h>
+#ifdef MOTION_VECTOR_REPROJECTION
+#include <nvidia/MotionVectorReprojection.h>
+#endif
+#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
+#include <nvidia/ShaderDebugOverlay.h>
 #endif
 #include "utility/Module.hpp"
 #include "utility/Patch.hpp"
@@ -572,54 +574,8 @@ void Framework::on_frame_d3d12() {
     } else {
         do_per_frame_thing();
     } */
-#if defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
-    if(!m_d3d12.cmd_ctxs.empty()){
-        auto& cmd_ctx = m_d3d12.cmd_ctxs[m_d3d12.cmd_ctx_index++ % m_d3d12.cmd_ctxs.size()];
-        if(cmd_ctx != nullptr) {
-            if (g_smaa_settings.enabled) {
-                cmd_ctx->wait(INFINITE);
-                std::scoped_lock _{ cmd_ctx->mtx };
-                cmd_ctx->has_commands = true;
 
-                auto swapchain = m_d3d12_hook->get_swap_chain();
-                auto bb_index = swapchain->GetCurrentBackBufferIndex();
-                auto bb = m_d3d12.rts[bb_index].Get();
-                auto bb_rt =  m_d3d12.get_cpu_rtv(device, (D3D12::RTV)bb_index);
-
-                m_smaa.Apply(cmd_ctx, bb, &bb_rt, m_d3d12_hook->m_last_used_dsv_resource);
-                cmd_ctx->execute();
-            }
-            if(g_dlss_settings.enabled) {
-                cmd_ctx->wait(INFINITE);
-                std::scoped_lock _{ cmd_ctx->mtx };
-                cmd_ctx->has_commands = true;
-
-                auto swapchain = m_d3d12_hook->get_swap_chain();
-                auto bb_index = swapchain->GetCurrentBackBufferIndex();
-                auto bb = m_d3d12.rts[bb_index].Get();
-                auto bb_rt =  m_d3d12.get_cpu_rtv(device, (D3D12::RTV)bb_index);
-//                auto m_dlss = UpscalerAfrNvidiaModule::Get();
-//                m_dlss->Apply(cmd_ctx->cmd_list.Get(), bb, &bb_rt);
-                cmd_ctx->execute();
-            }
-            if(g_taa_settings.enabled) {
-                cmd_ctx->wait(INFINITE);
-                std::scoped_lock _{ cmd_ctx->mtx };
-                cmd_ctx->has_commands = true;
-
-                auto swapchain = m_d3d12_hook->get_swap_chain();
-                auto bb_index = swapchain->GetCurrentBackBufferIndex();
-                auto bb = m_d3d12.rts[bb_index].Get();
-                auto bb_rt =  m_d3d12.get_cpu_rtv(device, (D3D12::RTV)bb_index);
-                auto m_taa = TAADebugView::Get();
-                m_taa->Apply(cmd_ctx->cmd_list.Get(), bb, &bb_rt);
-                cmd_ctx->execute();
-            }
-        }
-
-    }
-#endif
-#ifdef defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
+#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
     if(!m_d3d12.cmd_ctxs.empty() && ModSettings::g_internalSettings.debugShaders){
         auto& cmd_ctx = m_d3d12.cmd_ctxs[m_d3d12.cmd_ctx_index++ % m_d3d12.cmd_ctxs.size()];
         if(cmd_ctx != nullptr) {
@@ -2083,9 +2039,11 @@ bool Framework::init_d3d12() {
 
 
     m_d3d12.imgui_backend_datas[1] = ImGui::GetIO().BackendRendererUserData;
-//    static auto nv_mv = MotionVectorReprojection::Get();
-//    nv_mv->setup(device, bb_desc);
-#if defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
+#ifdef MOTION_VECTOR_REPROJECTION
+    static auto nv_mv = MotionVectorReprojection::Get();
+    nv_mv->setup(device, bb_desc);
+#endif
+#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
     static auto sl_debug = ShaderDebugOverlay::Get();
     sl_debug->setup(device, bb_desc);
 #endif
@@ -2099,12 +2057,14 @@ void Framework::deinit_d3d12() {
         }
     }
 
-#if defined(_DEBUG) && defined(GOWVR_EXPERIMENTAL)
+#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
     static auto sl_debug = ShaderDebugOverlay::Get();
     sl_debug->Reset();
 #endif
-//    static auto nv_mv = MotionVectorReprojection::Get();
-//    nv_mv->Reset();
+#ifdef MOTION_VECTOR_REPROJECTION
+    static auto nv_mv = MotionVectorReprojection::Get();
+    nv_mv->Reset();
+#endif
 
     m_d3d12.cmd_ctxs.clear();
 

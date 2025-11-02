@@ -321,16 +321,16 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
 
         frustums[i] = get_mat(i);
         // Update projection matrix
-        float sum_rl = (frustums[i][1] + frustums[i][0]);
-        float sum_tb = (frustums[i][2] + frustums[i][3]);
-        float inv_rl = (1.0f / (frustums[i][1] - frustums[i][0]));
-        float inv_tb = (1.0f / (frustums[i][2] - frustums[i][3]));
-        this->projections[i] = Matrix4x4f {
-            2.0f*inv_rl,   0.0f,          0.0f,                              0.0f,
-            0.0f,          2.0f*inv_tb,   0.0f,                              0.0f,
-            sum_rl*inv_rl, sum_tb*inv_tb, nearz/(nearz-farz),               -1.0f,
-            0.0f,          0.0f,          (nearz*farz)/(farz-nearz),         0.0f
-        };
+//        float sum_rl= (frustums[i][1] + frustums[i][0]);
+//        float sum_tb = (frustums[i][2] + frustums[i][3]);
+//        float inv_rl = (1.0f / (frustums[i][1] - frustums[i][0]));
+//        float inv_tb = (1.0f / (frustums[i][2] - frustums[i][3]));
+//        this->projections[i] = Matrix4x4f {
+//            2.0f*inv_rl,   0.0f,          0.0f,                              0.0f,
+//            0.0f,          2.0f*inv_tb,   0.0f,                              0.0f,
+//            sum_rl*inv_rl, sum_tb*inv_tb, nearz/(farz-nearz),               -1.0f,
+//            0.0f,          0.0f,          (nearz*farz)/(nearz-farz),         0.0f
+//        };
 
 //
 //        auto proj = glm::mat4(

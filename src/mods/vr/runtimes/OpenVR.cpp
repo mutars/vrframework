@@ -173,8 +173,8 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
 
     this->frustums[vr::Eye_Left] = get_mat(vr::Eye_Left);
     this->frustums[vr::Eye_Right] = get_mat(vr::Eye_Right);
-    this->projections[vr::Eye_Left] = calc_projection_matrix(this->frustums[vr::Eye_Left]);
-    this->projections[vr::Eye_Right] = calc_projection_matrix(this->frustums[vr::Eye_Right]);
+//    this->projections[vr::Eye_Left] = calc_projection_matrix(this->frustums[vr::Eye_Left]);
+//    this->projections[vr::Eye_Right] = calc_projection_matrix(this->frustums[vr::Eye_Right]);
 //        this->should_recalculate_eye_projections = false;
 //        this->last_eye_matrix_nearz = nearz;
 //    }

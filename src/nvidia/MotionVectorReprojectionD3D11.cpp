@@ -162,22 +162,22 @@ void MotionVectorReprojectionD3D11::Process(ID3D11DeviceContext* context, ID3D11
 
         // This entire block is your specific logic and is copied directly
         // You must ensure VR::get() and getSlConstants() are available and work in your D3D11 context
-        static auto vr = VR::get();
-        glm::mat4 correction = glm::mat4(1.0f);
-        if (vr->is_hmd_active()) {
-            auto eye = vr->m_views.get_eye_view(frame);
-            auto past_eye = vr->m_views.get_eye_view(frame - 1);
-            if (frame % 2 == 0) {
-                auto hmd_transform = vr->m_views.get_hmd_view(frame);
-                auto hmd_transform_past = vr->m_views.get_hmd_view(frame - 2);
-                correction = eye * hmd_transform_past * glm::inverse(hmd_transform) * glm::inverse(past_eye);
-            } else {
-                correction = eye * glm::inverse(past_eye);
-            }
-        } // else if (ModSettings::g_internalSettings.cameraShake) { ... }
-
-        const auto& sl_constants_n_1 = getSlConstants(frame - 1);
-        const auto& sl_constants_n = getSlConstants(frame);
+//        static auto vr = VR::get();
+//        glm::mat4 correction = glm::mat4(1.0f);
+//        if (vr->is_hmd_active()) {
+//            auto eye = vr->m_views.get_eye_view(frame);
+//            auto past_eye = vr->m_views.get_eye_view(frame - 1);
+//            if (frame % 2 == 0) {
+//                auto hmd_transform = vr->m_views.get_hmd_view(frame);
+//                auto hmd_transform_past = vr->m_views.get_hmd_view(frame - 2);
+//                correction = eye * hmd_transform_past * glm::inverse(hmd_transform) * glm::inverse(past_eye);
+//            } else {
+//                correction = eye * glm::inverse(past_eye);
+//            }
+//        } // else if (ModSettings::g_internalSettings.cameraShake) { ... }
+//
+//        const auto& sl_constants_n_1 = getSlConstants(frame - 1);
+//        const auto& sl_constants_n = getSlConstants(frame);
 //        auto projection = *(glm::mat4*)&sl_constants_n.cameraViewToClip;
 //        constants->correction = projection * correction * glm::inverse(projection);
 //        constants->cameraMotionCorrection = *(glm::mat4*)&sl_constants_n_1.prevClipToClip;

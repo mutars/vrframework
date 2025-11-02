@@ -1,16 +1,16 @@
 #define NOMINMAX
 
+#include "math/Math.hpp"
+#include <ModSettings.h>
+#include <Xinput.h>
 #include <fstream>
 #include <imgui.h>
-#include "math/Math.hpp"
-#include <Xinput.h>
-#include <ModSettings.h>
 #include <utility/ScopeGuard.hpp>
 
+#include "memory/FunctionHook.h"
 #include "utility/Memory.hpp"
 #include "utility/Module.hpp"
 #include "utility/Registry.hpp"
-#include "memory/FunctionHook.h"
 
 #include "VR.hpp"
 
@@ -622,16 +622,6 @@ void VR::update_hmd_state() {
     }
 
     runtime->update_matrices(m_nearz, m_farz);
-
-//    m_views.submit_eye_view(get_runtime()->eyes[vr::Eye_Left], m_engine_frame_count);
-//    m_views.submit_eye_view(get_runtime()->eyes[vr::Eye_Right], m_engine_frame_count + 1);
-//    m_views.submit_projection(get_runtime()->projections[vr::Eye_Left], m_engine_frame_count);
-//    m_views.submit_projection(get_runtime()->projections[vr::Eye_Right], m_engine_frame_count + 1);
-//    m_views.submit_standing_origin(m_standing_origin, m_engine_frame_count);
-//    m_views.submit_standing_origin(m_standing_origin, m_engine_frame_count + 1);
-//    auto hmd_transform = get_transform(0);
-//    m_views.submit_hmd_view(hmd_transform, m_engine_frame_count);
-//    m_views.submit_hmd_view(hmd_transform, m_engine_frame_count + 1);
     runtime->got_first_poses = true;
 }
 
@@ -821,21 +811,21 @@ Matrix4x4f VR::get_current_eye_transform(bool flip) {
     return get_runtime()->eyes[vr::Eye_Right];
 }
 
-Matrix4x4f VR::get_current_projection_matrix(bool flip) {
-    if (!is_hmd_active()) {
-        return glm::identity<Matrix4x4f>();
-    }
-
-    std::shared_lock _{get_runtime()->eyes_mtx};
-
-    auto mod_count = flip ? m_right_eye_interval : m_left_eye_interval;
-
-    if (m_engine_frame_count % 2 == mod_count) {
-        return get_runtime()->projections[(uint32_t)VRRuntime::Eye::LEFT];
-    }
-
-    return get_runtime()->projections[(uint32_t)VRRuntime::Eye::RIGHT];
-}
+//Matrix4x4f VR::get_current_projection_matrix(bool flip) {
+//    if (!is_hmd_active()) {
+//        return glm::identity<Matrix4x4f>();
+//    }
+//
+//    std::shared_lock _{get_runtime()->eyes_mtx};
+//
+//    auto mod_count = flip ? m_right_eye_interval : m_left_eye_interval;
+//
+//    if (m_engine_frame_count % 2 == mod_count) {
+//        return get_runtime()->projections[(uint32_t)VRRuntime::Eye::LEFT];
+//    }
+//
+//    return get_runtime()->projections[(uint32_t)VRRuntime::Eye::RIGHT];
+//}
 
 void VR::on_pre_imgui_frame() {
     if (!get_runtime()->ready()) {
@@ -1050,11 +1040,6 @@ void VR::on_begin_rendering(void* entry) {
             }
         }
     }
-
-    if ((m_engine_frame_count) % 2 == m_left_eye_interval) {
-        update_hmd_state();
-    }
-
 }
 
 void VR::on_end_rendering(void* entry) {

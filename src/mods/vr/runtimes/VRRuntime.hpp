@@ -130,7 +130,7 @@ struct VRRuntime {
 
     std::optional<std::string> error{};
 
-    std::array<Matrix4x4f, 2> projections{};
+//    std::array<Matrix4x4f, 2> projections{};
     std::array<Matrix4x4f, 2> eyes{};
 
     mutable std::shared_mutex projections_mtx{};
