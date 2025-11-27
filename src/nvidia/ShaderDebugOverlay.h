@@ -1,17 +1,18 @@
 #pragma once
 
 #include <DescriptorHeap.h>
-#include "MotionVectorReprojection.h"
 #include <d3d12.h>
+#include <Mod.hpp>
 #include <mods/vr/d3d12/ComPtr.hpp>
-#include <mods/vr/d3d12/CommandContext.hpp>
-#include <sl.h>
+#include <mods/vr/d3d12/TextureContext.hpp>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
+// Forward declaration
+class UpscalerAfrNvidiaModule;
 
-class ShaderDebugOverlay
+class ShaderDebugOverlay : public Mod
 {
 public:
     inline static std::shared_ptr<ShaderDebugOverlay> &Get() {
@@ -19,18 +20,28 @@ public:
         return instance;
     }
 
-    void Draw(ID3D12GraphicsCommandList *cmdList, ID3D12Resource *pResource, D3D12_CPU_DESCRIPTOR_HANDLE *rtv_handle);
-    bool setup(ID3D12Device *device, D3D12_RESOURCE_DESC backBuffer_desc);
+    bool setup(ID3D12Device *device, D3D12_RESOURCE_DESC& backBuffer_desc);
+
+    // Mod interface
+    std::string_view get_name() const override { return "ShaderDebug"; }
+    void on_device_reset() override { Reset(); }
+    void on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc) override { setup(pDevice4, desc); }
+    void on_draw_ui() override;
+    void Draw(ID3D12GraphicsCommandList* command_list, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv);
+    void on_pre_imgui_frame() override;
 
     inline void Reset() {
         m_debug_layer_pso.Reset();
         m_rootSignature.Reset();
-        m_debug_heap.reset();
+        m_srv_heap.reset();
+        m_rtv_heap.reset();
+        m_commandContext.reset();
+        m_image1.Reset();
     }
 
     ShaderDebugOverlay() = default;
 
-    ~ShaderDebugOverlay() {
+    ~ShaderDebugOverlay() override {
         Reset();
     };
 
@@ -82,9 +93,22 @@ private:
 
     bool CreateRootSignature(ID3D12Device *device);
     bool CreatePipelineStates(ID3D12Device *device, DXGI_FORMAT backBufferFormat);
+//    void RenderToDebugTexture(ID3D12GraphicsCommandList* commandList);
 
     ComPtr<ID3D12RootSignature> m_rootSignature;
     ComPtr<ID3D12PipelineState> m_debug_layer_pso;
-    std::unique_ptr<DirectX::DescriptorHeap> m_debug_heap{};
+    std::unique_ptr<DirectX::DescriptorHeap> m_srv_heap{};
+    std::unique_ptr<DirectX::DescriptorHeap> m_rtv_heap{};
+    d3d12::CommandContext m_commandContext{};
+    ComPtr<ID3D12Resource> m_image1{ nullptr};
+    
+    UINT m_debug_width{0};
+    UINT m_debug_height{0};
+    bool m_initialized{false};
+    
+    // Shader configuration
+    float m_scale{40.0f};           // Scale factor for visualization
+    uint32_t m_channel_mask{0x7};   // Default: RGB enabled (bits: R=1, G=2, B=4, A=8)
+    bool m_show_abs{true};          // Show absolute values
 
 };

@@ -113,14 +113,6 @@ D3D12_SHADER_RESOURCE_VIEW_DESC getSRVdesc(const D3D12_RESOURCE_DESC& desc) {
 
 void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector, D3D12_RESOURCE_STATES mv_state, ID3D12Resource* depth1, D3D12_RESOURCE_STATES depth_state, uint32_t frame, ID3D12GraphicsCommandList* cmd_list)
 {
-    if(!ModSettings::g_internalSettings.nvidiaMotionVectorFix) {
-        if(ModSettings::g_internalSettings.debugShaders && ValidateResource(motionVector, m_motion_vector_buffer)) {
-            CopyResource(cmd_list, motionVector, m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
-        }
-        return;
-    }
-
-    
     auto device = g_framework->get_d3d12_hook()->get_device();
     if (!device) {
         return;
@@ -202,10 +194,6 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     barriers[1].Transition.StateAfter = mv_state;
     cmd_list->ResourceBarrier(2, barriers);
-
-    if(ModSettings::g_internalSettings.debugShaders && ValidateResource(motionVector, m_motion_vector_buffer)) {
-        CopyResource(cmd_list, motionVector, m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
-    }
 }
 
 
@@ -231,7 +219,7 @@ bool MotionVectorReprojection::CreatePipelineStates(ID3D12Device* device, DXGI_F
     return true;
 }
 
-bool MotionVectorReprojection::setup(ID3D12Device* device, D3D12_RESOURCE_DESC backBuffer_desc)
+void MotionVectorReprojection::on_d3d12_initialize(ID3D12Device* device, const D3D12_RESOURCE_DESC& backBuffer_desc)
 {
     try {
         m_compute_heap = std::make_unique<DirectX::DescriptorHeap>(device,
@@ -241,17 +229,21 @@ bool MotionVectorReprojection::setup(ID3D12Device* device, D3D12_RESOURCE_DESC b
 
     } catch(...) {
         spdlog::error("Failed to create SRV/RTV descriptor heap for MotionVectorFix");
-        return false;
+        return;
     }
     if (!CreateComputeRootSignature(device) ||
         !CreatePipelineStates(device, DXGI_FORMAT_R10G10B10A2_UNORM))
     {
         spdlog::error("Failed to setup MotionVectorFix");
-        return false;
+        return;
     }
 
-    initialized = true;
-    return true;
+    m_initialized = true;
+}
+
+void MotionVectorReprojection::on_device_reset()
+{
+    Reset();
 }
 
 void MotionVectorReprojection::CopyResource(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pSrcResource, ID3D12Resource* pDstResource, D3D12_RESOURCE_STATES srcState,

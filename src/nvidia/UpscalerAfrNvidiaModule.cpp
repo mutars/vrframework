@@ -1,0 +1,313 @@
+#include "UpscalerAfrNvidiaModule.h"
+#include "sl_matrix_helpers.h"
+#include <Framework.hpp>
+#include <ModSettings.h>
+#include <aer/ConstantsPool.h>
+#include <mods/VR.hpp>
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+
+std::optional<std::string> UpscalerAfrNvidiaModule::on_initialize()
+{
+    InstallHooks();
+    return Mod::on_initialize();
+}
+
+void UpscalerAfrNvidiaModule::on_draw_ui()
+{
+    if (!ImGui::CollapsingHeader(get_name().data())) {
+        return;
+    }
+
+    m_enabled->draw("Enable NVIDIA AFR");
+    m_motion_vector_fix->draw("Motion Vector Reprojection Fix");
+}
+
+void UpscalerAfrNvidiaModule::on_config_load(const utility::Config& cfg, bool set_defaults)
+{
+    for (IModValue& option : m_options) {
+        option.config_load(cfg, set_defaults);
+    }
+}
+
+void UpscalerAfrNvidiaModule::on_config_save(utility::Config& cfg)
+{
+    for (IModValue& option : m_options) {
+        option.config_save(cfg);
+    }
+}
+
+void UpscalerAfrNvidiaModule::on_device_reset()
+{
+    m_motion_vector_reprojection.on_device_reset();
+}
+
+void UpscalerAfrNvidiaModule::on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc)
+{
+    m_motion_vector_reprojection.on_d3d12_initialize(pDevice4, desc);
+}
+
+void UpscalerAfrNvidiaModule::InstallHooks()
+{
+    static HMODULE p_hm_sl_interposter = nullptr;
+    if (p_hm_sl_interposter) {
+        return;
+    }
+    spdlog::info("Installing sl.interposer hooks");
+    while ((p_hm_sl_interposter = GetModuleHandle("sl.interposer.dll")) == nullptr) {
+        std::this_thread::yield();
+    }
+
+//    auto getNewFrameTokenFn = GetProcAddress(g_interposer, "slGetNewFrameToken");
+//    m_get_new_frame_token_hook = std::make_unique<FunctionHook>((void **)getNewFrameTokenFn, (void *) &DlssDualView::on_slGetNewFrameToken);
+//    if(!m_get_new_frame_token_hook->create()) {
+//        spdlog::error("Failed to hook slGetNewFrameToken");
+//    }
+
+    auto slSetTagFn = GetProcAddress(p_hm_sl_interposter, "slSetTag");
+    m_set_tag_hook  = std::make_unique<FunctionHook>((void**)slSetTagFn, (void*)&UpscalerAfrNvidiaModule::on_slSetTag);
+    if (!m_set_tag_hook->create()) {
+        spdlog::error("Failed to hook slSetTag");
+    }
+
+    auto slEvaluateFeatureFn = GetProcAddress(p_hm_sl_interposter, "slEvaluateFeature");
+    m_evaluate_feature_hook  = std::make_unique<FunctionHook>((void**)slEvaluateFeatureFn, (void*)&UpscalerAfrNvidiaModule::on_slEvaluateFeature);
+    if (!m_evaluate_feature_hook->create()) {
+        spdlog::error("Failed to hook slEvaluateFeature");
+    }
+
+    auto slSetConstantsFn = GetProcAddress(p_hm_sl_interposter, "slSetConstants");
+    m_set_constants_hook  = std::make_unique<FunctionHook>((void**)slSetConstantsFn, (void*)&UpscalerAfrNvidiaModule::on_slSetConstants);
+    if (!m_set_constants_hook->create()) {
+        spdlog::error("Failed to hook slSetConstants");
+    }
+
+    using get_feature_funciton = sl::Result (*)(sl::Feature feature, const char* functionName, void*& function);
+    auto get_feature_function = (get_feature_funciton) GetProcAddress(p_hm_sl_interposter, "slGetFeatureFunction");
+    void* dlssSetOptionsFn;
+    get_feature_function(sl::kFeatureDLSS, "slDLSSSetOptions", dlssSetOptionsFn);
+    m_dlss_set_options_hook = std::make_unique<FunctionHook>((void**)dlssSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssSetOptions);
+    if (!m_dlss_set_options_hook->create()) {
+        spdlog::error("Failed to hook slSetOptions");
+    }
+//    void* slDLSSDSetOptionsFn;
+//    get_feature_function(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", slDLSSDSetOptionsFn);
+//    m_dlssrr_set_options_hook = std::make_unique<FunctionHook>((void**)slDLSSDSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssrrSetOptions);
+//    if (!m_dlssrr_set_options_hook->create()) {
+//        spdlog::error("Failed to hook slDLSSDSetOptions");
+//    }
+
+//    void* slDeepDVCSetOptionsFn;
+//    get_feature_function(sl::kFeatureDeepDVC, "slDeepDVCSetOptions", slDeepDVCSetOptionsFn);
+//    m_sl_dvc_set_options_hook = std::make_unique<FunctionHook>((void**)slDeepDVCSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_slDVCSetOptions);
+
+
+    auto slAllocateResourcesFn = GetProcAddress(p_hm_sl_interposter, "slAllocateResources");
+    m_allocate_resources_hook  = std::make_unique<FunctionHook>((void**)slAllocateResourcesFn, (void*)&UpscalerAfrNvidiaModule::on_slAllocateResources);
+    if (!m_allocate_resources_hook->create()) {
+        spdlog::error("Failed to hook slAllocateResources");
+    }
+
+    auto slFreeResourcesFn = GetProcAddress(p_hm_sl_interposter, "slFreeResources");
+    m_free_resources_hook  = std::make_unique<FunctionHook>((void**)slFreeResourcesFn, (void*)&UpscalerAfrNvidiaModule::on_slFreeResources);
+    if (!m_free_resources_hook->create()) {
+        spdlog::error("Failed to hook slFreeResources");
+    }
+
+//        REL::Relocation<uintptr_t>  getDllsFrameTokenFnAddr{REL::ID(1078687)};
+//        m_onGetDllsFrameToken = std::make_unique<FunctionHook>(getDllsFrameTokenFnAddr.address(), (uintptr_t)&DlssDualView::on_ceGetNewFrameToken);
+//        m_onGetDllsFrameToken->create();
+
+    spdlog::info("sl.interposer Hooks installed");
+}
+
+/*sl::Result UpscalerAfrNvidiaModule::on_slGetNewFrameToken(sl::FrameToken*& token, const uint32_t* frameIndex)
+{
+    auto instance = UpscalerAfrNvidiaModule::Get();
+
+    auto original_fn = instance->m_get_new_frame_token_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slGetNewFrameToken)>();
+    auto vr          = VR::get();
+    //    spdlog::info("slGetNewFrameToken called {} frame {}", vr->get_current_render_eye() == VRRuntime::Eye::RIGHT,*frameIndex);
+    //
+    //    if(vr->is_hmd_active()  && !vr->m_left_trigger_down && vr->get_current_render_eye() == VRRuntime::Eye::RIGHT && instance->m_afr_frame_token != nullptr) {
+    //        token = instance->m_afr_frame_token;
+    //        return sl::Result::eOk;
+    //
+    //    }
+    //    if(instance->first_frame == 0) {
+    //        instance->first_frame = *frameIndex;
+    //    }
+    auto half_frame = *frameIndex / 2;
+    auto result     = original_fn(token, frameIndex);
+    //    original_fn(instance->m_afr_frame_token, &half_frame);
+    return result;
+}*/
+
+
+void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame, sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer) {
+    if(!m_motion_vector_reprojection.isInitialized()) {
+        return;
+    }
+    sl::ResourceTag* mvTag = nullptr;
+    sl::ResourceTag* depthTag = nullptr;
+    for (uint32_t i = 0; i < numInputs; i++) {
+        if(inputs[i]->structType == sl::ResourceTag::s_structType && ((sl::ResourceTag*) inputs[i])->type == sl::kBufferTypeMotionVectors) {
+            mvTag = (sl::ResourceTag*)inputs[i];
+        } else if(inputs[i]->structType == sl::ResourceTag::s_structType && ((sl::ResourceTag*) inputs[i])->type == sl::kBufferTypeDepth) {
+            depthTag = (sl::ResourceTag*)inputs[i];
+        }
+    }
+
+    if(mvTag && depthTag) {
+        auto mv_resource        = mvTag->resource;
+        auto mv_state           = (D3D12_RESOURCE_STATES)mv_resource->state;
+        auto mv_native_resource = (ID3D12Resource*)mv_resource->native;
+        auto depth_resource        = depthTag->resource;
+        auto depth_state           = (D3D12_RESOURCE_STATES)depth_resource->state;
+        auto depth_native_resource = (ID3D12Resource*)depth_resource->native;
+        auto command_list    = (ID3D12GraphicsCommandList*)cmdBuffer;
+        if(m_enabled->value() && m_motion_vector_fix->value()) {
+            m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, frame, command_list);
+        }
+        if(ModSettings::g_internalSettings.debugShaders && MotionVectorReprojection::ValidateResource(mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer)) {
+            MotionVectorReprojection::CopyResource(command_list, mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
+        }
+    }
+}
+
+sl::Result UpscalerAfrNvidiaModule::on_slSetTag(sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer)
+{
+    static auto            instance    = UpscalerAfrNvidiaModule::Get();
+    static auto            original_fn = instance->m_set_tag_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetTag)>();
+    static auto            vr          = VR::get();
+    spdlog::error("UNEXPECTED CALL TO slSetTag");
+    exit(1);
+    if(vr->get_current_render_eye() == VRRuntime::Eye::RIGHT) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        return original_fn(afr_viewport_handle, tags, numTags, cmdBuffer);
+    }
+    auto result = original_fn(viewport, tags, numTags, cmdBuffer);
+    return result;
+}
+
+bool supported_afr_feature(sl::Feature feature)
+{
+    return feature == sl::kFeatureDLSS;
+}
+
+sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame, sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer)
+{
+    static auto instance    = UpscalerAfrNvidiaModule::Get();
+    static auto original_fn = instance->m_evaluate_feature_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slEvaluateFeature)>();
+    static auto vr          = VR::get();
+//
+//    constexpr sl::BufferType kBufferTypeReactiveMaskHint = 36;
+//
+//    // Filter out kBufferTypeReactiveMaskHint inputs
+//    std::vector<sl::BaseStructure*> filtered_inputs;
+//    for (uint32_t i = 0; i < numInputs; i++) {
+//        if (inputs[i]->structType == sl::ResourceTag::s_structType) {
+//            auto resourceTag = (sl::ResourceTag*)inputs[i];
+//            if (resourceTag->type == kBufferTypeReactiveMaskHint) {
+//                continue; // Skip this input
+//            }
+//        }
+//        filtered_inputs.push_back(inputs[i]);
+//    }
+//
+//    uint32_t filteredNumInputs = static_cast<uint32_t>(filtered_inputs.size());
+
+    if(supported_afr_feature(feature)) {
+        instance->ReprojectMotionVectors(frame, inputs, numInputs, cmdBuffer);
+    }
+
+    if(frame % 2 == 0 && supported_afr_feature(feature) && instance->m_enabled->value()) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        std::vector<sl::BaseStructure*> afr_inputs{};
+        afr_inputs.resize(numInputs);
+        //TODO  viewport is always at index 0
+        for (uint32_t i = 0; i < numInputs; i++) {
+            if (inputs[i]->structType == sl::ViewportHandle::s_structType) {
+                afr_inputs[i] = &afr_viewport_handle;
+            } else {
+                afr_inputs[i] = inputs[i];
+            }
+        }
+        return original_fn(feature, frame, afr_inputs.data(), numInputs, cmdBuffer);
+    }
+    auto result = original_fn(feature, frame, inputs, numInputs, cmdBuffer);
+    return result;
+}
+
+// TODO vr->get_current_render_eye() == VRRuntime::Eye::RIGHT in real is left eye texture
+sl::Result UpscalerAfrNvidiaModule::on_slSetConstants(sl::Constants& values, const sl::FrameToken& frame, sl::ViewportHandle& viewport)
+{
+    static auto instance = UpscalerAfrNvidiaModule::Get();
+    static auto original_fn = instance->m_set_constants_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetConstants)>();
+    auto& sl_constants = GlobalPool::getSlConstants(frame);
+    sl_constants.cameraViewToClip = *(glm::mat4 *)&values.cameraViewToClip;
+    sl_constants.prevClipToClip = *(glm::mat4 *)&values.prevClipToClip;
+    if(frame % 2 == 0 && instance->m_enabled->value()) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        return original_fn(values, frame, afr_viewport_handle);
+    }
+    auto result = original_fn(values, frame, viewport);
+    return result;
+}
+
+//sl::Result UpscalerAfrNvidiaModule::on_slDVCSetOptions(const sl::ViewportHandle &viewport, const sl::DeepDVCOptions &options) {
+//    static auto     instance         = UpscalerAfrNvidiaModule::Get();
+//    static auto     original_fn      = instance->m_sl_dvc_set_options_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slDVCSetOptions)>();
+//    {
+//        sl::ViewportHandle afr_viewport_handle{instance->afr_viewport_id};
+//        original_fn(afr_viewport_handle, options);
+//    }
+//    return original_fn(viewport, options);
+//}
+
+
+//sl::Result UpscalerAfrNvidiaModule::on_dlssrrSetOptions(const sl::ViewportHandle &viewport, const sl::DLSSDOptions &options) {
+//    static auto     instance         = UpscalerAfrNvidiaModule::Get();
+//    static auto     original_fn      = instance->m_dlssrr_set_options_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_dlssrrSetOptions)>();
+//    {
+//        sl::ViewportHandle afr_viewport_handle{instance->afr_viewport_id};
+//        original_fn(afr_viewport_handle, options);
+//    }
+//    return original_fn(viewport, options);
+//}
+
+
+sl::Result UpscalerAfrNvidiaModule::on_dlssSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSOptions& options)
+{
+    static auto     instance         = UpscalerAfrNvidiaModule::Get();
+    static auto     original_fn      = instance->m_dlss_set_options_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_dlssSetOptions)>();
+    if(instance->m_enabled->value()) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        original_fn(afr_viewport_handle, options);
+    }
+    return original_fn(viewport, options);
+}
+
+sl::Result UpscalerAfrNvidiaModule::on_slFreeResources(sl::Feature feature, const sl::ViewportHandle& viewport)
+{
+    static auto instance    = UpscalerAfrNvidiaModule::Get();
+    static auto original_fn = instance->m_free_resources_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slFreeResources)>();
+    if(supported_afr_feature(feature) && instance->m_enabled->value()) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        original_fn(feature, afr_viewport_handle);
+    }
+    spdlog::info("slFreeResources called for feature {:x} viewport {:x}", (UINT)feature, (UINT)viewport);
+    return original_fn(feature, viewport);
+}
+
+sl::Result UpscalerAfrNvidiaModule::on_slAllocateResources(sl::CommandBuffer* cmdBuffer, sl::Feature feature, const sl::ViewportHandle& viewport)
+{
+    static auto instance    = UpscalerAfrNvidiaModule::Get();
+    static auto original_fn = instance->m_allocate_resources_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slAllocateResources)>();
+    if(supported_afr_feature(feature) && instance->m_enabled->value()) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        original_fn(cmdBuffer, feature, afr_viewport_handle);
+    }
+    spdlog::info("slAllocateResources called for feature {:x} viewport {:x}", (UINT)feature, (UINT)viewport);
+    return original_fn(cmdBuffer, feature, viewport);
+}

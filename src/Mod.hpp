@@ -554,6 +554,8 @@ public:
     virtual void on_post_present() {}; // actually after present gets called
     virtual void on_draw_ui() {};
     virtual void on_device_reset() {};
+    virtual void on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc) {};
+    virtual void on_d3d11_initialize(ID3D11Device* pDevice, D3D11_TEXTURE2D_DESC& desc) {};
     virtual bool on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) { return true; };
     virtual void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {};
     virtual void on_xinput_get_capabilities(uint32_t* retval, uint32_t user_index, uint32_t dwFlags,XINPUT_CAPABILITIES *pCapabilities) {};
@@ -561,6 +563,13 @@ public:
 
     virtual void on_post_render_vr_framework_dx11(ID3D11DeviceContext* context, ID3D11Texture2D* tex, ID3D11RenderTargetView* rtv) {};
     virtual void on_post_render_vr_framework_dx12(ID3D12GraphicsCommandList* command_list, ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE* rtv) {};
+
+    virtual void on_d3d12_set_render_targets(ID3D12GraphicsCommandList5* cmd_list, UINT num_rtvs, 
+        const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single_handle, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {};
+    virtual void on_d3d12_set_scissor_rects(ID3D12GraphicsCommandList5* cmd_list, UINT num_rects, const D3D12_RECT* rects) {};
+    virtual void on_d3d12_set_viewports(ID3D12GraphicsCommandList5* cmd_list, UINT num_viewports, const D3D12_VIEWPORT* viewports) {};
+    virtual void on_d3d12_create_render_target_view(ID3D12Device* device, ID3D12Resource* pResource, 
+        const D3D12_RENDER_TARGET_VIEW_DESC* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {};
 
     virtual void on_config_load(const utility::Config& cfg, bool set_defaults);
     virtual void on_config_save(utility::Config& cfg);

@@ -79,3 +79,41 @@ void Mods::on_device_reset() const {
         mod->on_device_reset();
     }
 }
+
+void Mods::on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc) const {
+    for (auto& mod : m_mods) {
+        mod->on_d3d12_initialize(pDevice4, desc);
+    }
+}
+
+void Mods::on_d3d11_initialize(ID3D11Device* pDevice, D3D11_TEXTURE2D_DESC& desc) const {
+    for (auto& mod : m_mods) {
+        mod->on_d3d11_initialize(pDevice, desc);
+    }
+}
+
+void Mods::on_d3d12_set_render_targets(ID3D12GraphicsCommandList5* cmd_list, UINT num_rtvs, 
+    const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single_handle, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) const {
+    for (auto& mod : m_mods) {
+        mod->on_d3d12_set_render_targets(cmd_list, num_rtvs, rtvs, single_handle, dsv);
+    }
+}
+
+void Mods::on_d3d12_set_scissor_rects(ID3D12GraphicsCommandList5* cmd_list, UINT num_rects, const D3D12_RECT* rects) const {
+    for (auto& mod : m_mods) {
+        mod->on_d3d12_set_scissor_rects(cmd_list, num_rects, rects);
+    }
+}
+
+void Mods::on_d3d12_set_viewports(ID3D12GraphicsCommandList5* cmd_list, UINT num_viewports, const D3D12_VIEWPORT* viewports) const {
+    for (auto& mod : m_mods) {
+        mod->on_d3d12_set_viewports(cmd_list, num_viewports, viewports);
+    }
+}
+
+void Mods::on_d3d12_create_render_target_view(ID3D12Device* device, ID3D12Resource* pResource, 
+    const D3D12_RENDER_TARGET_VIEW_DESC* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) const {
+    for (auto& mod : m_mods) {
+        mod->on_d3d12_create_render_target_view(device, pResource, pDesc, DestDescriptor);
+    }
+}

@@ -77,6 +77,13 @@ public:
     void on_post_present_d3d12();
     void on_reset();
 
+    void on_d3d12_set_render_targets(ID3D12GraphicsCommandList5* cmd_list, UINT num_rtvs, 
+        const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single_handle, D3D12_CPU_DESCRIPTOR_HANDLE* dsv);
+    void on_d3d12_set_scissor_rects(ID3D12GraphicsCommandList5* cmd_list, UINT num_rects, const D3D12_RECT* rects);
+    void on_d3d12_set_viewports(ID3D12GraphicsCommandList5* cmd_list, UINT num_viewports, const D3D12_VIEWPORT* viewports);
+    void on_d3d12_create_render_target_view(ID3D12Device* device, ID3D12Resource* pResource, 
+        const D3D12_RENDER_TARGET_VIEW_DESC* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor);
+
     void patch_set_cursor_pos();
     void remove_set_cursor_pos_patch();
 

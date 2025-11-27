@@ -176,8 +176,11 @@ public:
     bool session_ready{false};
     bool frame_began{false};
     bool frame_synced{false};
+#ifdef DEBUG_PROFILING_ENABLED
+    bool profile_calls{true};
+#else
     bool profile_calls{false};
-
+#endif
     std::chrono::high_resolution_clock::time_point profiler_start_time{};
 
     std::recursive_mutex sync_mtx{};

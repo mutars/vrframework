@@ -26,12 +26,6 @@ extern "C" {
 #include <imgui.h>
 #include <imgui_internal.h>
 //#include <imnodes.h>
-#ifdef MOTION_VECTOR_REPROJECTION
-#include <nvidia/MotionVectorReprojection.h>
-#endif
-#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
-#include <nvidia/ShaderDebugOverlay.h>
-#endif
 #include "utility/Module.hpp"
 #include "utility/Patch.hpp"
 #include "utility/Scan.hpp"
@@ -308,6 +302,20 @@ bool Framework::hook_d3d12() {
         m_d3d12_hook->on_post_present([this](D3D12Hook& hook) { on_post_present_d3d12(); });
         m_d3d12_hook->on_resize_buffers([this](D3D12Hook& hook) { on_reset(); });
         m_d3d12_hook->on_resize_target([this](D3D12Hook& hook) { on_reset(); });
+        m_d3d12_hook->on_set_render_targets([this](D3D12Hook& hook, ID3D12GraphicsCommandList5* cmd_list, UINT num_rtvs, 
+            const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single_handle, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
+            on_d3d12_set_render_targets(cmd_list, num_rtvs, rtvs, single_handle, dsv);
+        });
+        m_d3d12_hook->on_set_scissor_rects([this](D3D12Hook& hook, ID3D12GraphicsCommandList5* cmd_list, UINT num_rects, const D3D12_RECT* rects) {
+            on_d3d12_set_scissor_rects(cmd_list, num_rects, rects);
+        });
+        m_d3d12_hook->on_set_viewports([this](D3D12Hook& hook, ID3D12GraphicsCommandList5* cmd_list, UINT num_viewports, const D3D12_VIEWPORT* viewports) {
+            on_d3d12_set_viewports(cmd_list, num_viewports, viewports);
+        });
+        m_d3d12_hook->on_create_render_target_view([this](D3D12Hook& hook, ID3D12Device* device, ID3D12Resource* pResource, 
+            const D3D12_RENDER_TARGET_VIEW_DESC* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
+            on_d3d12_create_render_target_view(device, pResource, pDesc, DestDescriptor);
+        });
     //}
     //m_d3d12_hook->on_create_swap_chain([this](D3D12Hook& hook) { m_d3d12.command_queue = m_d3d12_hook->get_command_queue(); });
 
@@ -575,28 +583,6 @@ void Framework::on_frame_d3d12() {
         do_per_frame_thing();
     } */
 
-#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
-    if(!m_d3d12.cmd_ctxs.empty() && ModSettings::g_internalSettings.debugShaders){
-        auto& cmd_ctx = m_d3d12.cmd_ctxs[m_d3d12.cmd_ctx_index++ % m_d3d12.cmd_ctxs.size()];
-        if(cmd_ctx != nullptr) {
-            cmd_ctx->wait(INFINITE);
-            std::scoped_lock _{ cmd_ctx->mtx };
-            cmd_ctx->has_commands = true;
-            {
-                    static auto nv_mv = ShaderDebugOverlay::Get();
-                    auto swapchain = m_d3d12_hook->get_swap_chain();
-                    auto bb_index = swapchain->GetCurrentBackBufferIndex();
-                    auto bb = m_d3d12.rts[bb_index].Get();
-                    auto bb_rt =  m_d3d12.get_cpu_rtv(device, (D3D12::RTV)bb_index);
-
-                    nv_mv->Draw(cmd_ctx->cmd_list.Get(), bb, &bb_rt);
-            }
-            cmd_ctx->execute();
-        }
-
-    }
-#endif
-
     if (is_init_ok) {
         m_mods->on_present();
     }
@@ -685,6 +671,34 @@ void Framework::on_post_present_d3d12() {
 
     if (m_last_present_time <= std::chrono::steady_clock::now()){
         m_last_present_time = std::chrono::steady_clock::now();
+    }
+}
+
+void Framework::on_d3d12_set_render_targets(ID3D12GraphicsCommandList5* cmd_list, UINT num_rtvs, 
+    const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single_handle, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
+    if (m_game_data_initialized) {
+        m_mods->on_d3d12_set_render_targets(cmd_list, num_rtvs, rtvs, single_handle, dsv);
+    }
+}
+
+void Framework::on_d3d12_set_scissor_rects(ID3D12GraphicsCommandList5* cmd_list, UINT num_rects, const D3D12_RECT* rects) {
+    if (m_game_data_initialized) {
+        m_mods->on_d3d12_set_scissor_rects(cmd_list, num_rects, rects);
+    }
+}
+
+
+void Framework::on_d3d12_create_render_target_view(ID3D12Device* device, ID3D12Resource* pResource, const D3D12_RENDER_TARGET_VIEW_DESC* pDesc,
+                                                   D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+    if (m_game_data_initialized) {
+        m_mods->on_d3d12_create_render_target_view(device, pResource, pDesc, DestDescriptor);
+    }
+}
+
+void Framework::on_d3d12_set_viewports(ID3D12GraphicsCommandList5* cmd_list, UINT num_viewports, const D3D12_VIEWPORT* viewports) {
+    if (m_game_data_initialized) {
+        m_mods->on_d3d12_set_viewports(cmd_list, num_viewports, viewports);
     }
 }
 
@@ -1828,6 +1842,9 @@ bool Framework::init_d3d11() {
 
         io.DisplayFramebufferScale = ImVec2(scaleX, scaleY);
     }
+    if(m_game_data_initialized) {
+        m_mods->on_d3d11_initialize(device, backbuffer_desc);
+    }
 
     return true;
 }
@@ -2039,14 +2056,9 @@ bool Framework::init_d3d12() {
 
 
     m_d3d12.imgui_backend_datas[1] = ImGui::GetIO().BackendRendererUserData;
-#ifdef MOTION_VECTOR_REPROJECTION
-    static auto nv_mv = MotionVectorReprojection::Get();
-    nv_mv->setup(device, bb_desc);
-#endif
-#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
-    static auto sl_debug = ShaderDebugOverlay::Get();
-    sl_debug->setup(device, bb_desc);
-#endif
+    if(m_game_data_initialized) {
+        m_mods->on_d3d12_initialize(device, bb_desc);
+    }
     return true;
 }
 
@@ -2056,15 +2068,6 @@ void Framework::deinit_d3d12() {
             ctx->reset();
         }
     }
-
-#if defined(_DEBUG) && defined(VRMOD_EXPERIMENTAL)
-    static auto sl_debug = ShaderDebugOverlay::Get();
-    sl_debug->Reset();
-#endif
-#ifdef MOTION_VECTOR_REPROJECTION
-    static auto nv_mv = MotionVectorReprojection::Get();
-    nv_mv->Reset();
-#endif
 
     m_d3d12.cmd_ctxs.clear();
 

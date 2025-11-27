@@ -15,15 +15,16 @@ public:
     friend class UpscalerAfrNvidiaModule;
     friend class ShaderDebugOverlay;
 
-    inline static std::shared_ptr<MotionVectorReprojection>& Get()
-    {
-        static auto instance = std::make_shared<MotionVectorReprojection>();
-        return instance;
-    }
+    MotionVectorReprojection() = default;
+    ~MotionVectorReprojection() { Reset(); };
 
-    inline bool isInitialized() const
+    // Lifecycle methods (called by UpscalerAfrNvidiaModule)
+    void on_d3d12_initialize(ID3D12Device* device, const D3D12_RESOURCE_DESC& backBuffer_desc);
+    void on_device_reset();
+
+    [[nodiscard]] inline bool isInitialized() const
     {
-        if (!g_framework->is_ready() || !initialized) {
+        if (!g_framework->is_ready() || !m_initialized) {
             return false;
         }
         return true;
@@ -41,11 +42,9 @@ public:
         return true;
     }
 
-    bool setup(ID3D12Device* device, D3D12_RESOURCE_DESC backBuffer_desc);
-
     inline void Reset()
     {
-        initialized = false;
+        m_initialized = false;
         m_compute_pso.Reset();
         m_computeRootSignature.Reset();
         m_compute_heap.reset();
@@ -64,10 +63,6 @@ public:
     //    void ProcessMotionVectors(ID3D12Resource* mvec, D3D12_RESOURCE_STATES state, uint32_t frame);
     void ProcessMotionVectors(ID3D12Resource* mvec, D3D12_RESOURCE_STATES mvec_state, ID3D12Resource* depth, D3D12_RESOURCE_STATES depth_state, uint32_t frame,
                               ID3D12GraphicsCommandList* cmd_list);
-
-    MotionVectorReprojection() = default;
-
-    ~MotionVectorReprojection() { Reset(); };
 
     inline static DXGI_FORMAT getCorrectDXGIFormat(DXGI_FORMAT Format)
     {
@@ -129,5 +124,5 @@ private:
     ComPtr<ID3D12PipelineState>              m_compute_pso;
     std::unique_ptr<DirectX::DescriptorHeap> m_compute_heap{};
 
-    bool initialized{ false };
+    bool m_initialized{ false };
 };

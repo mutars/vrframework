@@ -2,7 +2,6 @@
 #include <future>
 #include <unordered_set>
 
-//#include <CreationEngine/CreationEngineDirectX12Module.h>
 #include <mods/VR.hpp>
 #include <spdlog/spdlog.h>
 #include <utility/Module.hpp>
@@ -307,6 +306,12 @@ bool D3D12Hook::hook() {
         spdlog::error("[VR] Failed to create command list for hooking");
     }
 
+    ID3D12GraphicsCommandList5* cmd_list5{};
+    if (FAILED(cmd_list->QueryInterface(IID_PPV_ARGS(&cmd_list5)))) {
+        spdlog::error("[VR] Failed to query ID3D12GraphicsCommandList5 for hooking");
+    }
+
+
     utility::ThreadSuspender suspender{};
 
     try {
@@ -314,30 +319,46 @@ bool D3D12Hook::hook() {
 
         m_present_hook.reset();
         m_swapchain_hook.reset();
-        m_set_render_targets_hook.reset();
+        m_create_render_target_view_hook.reset();
         m_create_depth_stencil_view_hook.reset();
         m_is_phase_1 = true;
 
         auto& present_fn = (*(void***)swap_chain)[8]; // Present
         m_present_hook = std::make_unique<PointerHook>(&present_fn, (void*)&D3D12Hook::present);
-//        auto& set_render_targets_fn = (*(void***)cmd_list)[46];
+        auto& set_render_targets_fn = (*(void***)cmd_list)[46];
+        auto& set_scissor_rects_fn = (*(void***)cmd_list)[22];
+        auto& set_viewports_fn = (*(void***)cmd_list)[21];
+//        auto& set_pipeline_state_fn = (*(void***)cmd_list)[25];
 //        auto Barriers = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ResourceBarrier);
 //        spdlog::info("ResourceBarrier offset: {}", Barriers);
 //        auto ExecuteIndirectOff = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ExecuteIndirect);
-//        m_commandlist_hook = std::make_unique<VtableHook>(cmd_list);
-//        m_commandlist_hook->hook_method(59, (uintptr_t)&D3D12Hook::execute_indirect);
-//        m_commandlist_hook->hook_method(14, (uintptr_t)&D3D12Hook::dispatch);
+        if(cmd_list5) {
+//            m_commandlist_hook = std::make_unique<VtableHook>(cmd_list);
+//            //        m_commandlist_hook->hook_method(59, (uintptr_t)&D3D12Hook::execute_indirect);
+//            //        m_commandlist_hook->hook_method(14, (uintptr_t)&D3D12Hook::dispatch);
+//            m_commandlist_hook->hook_method(46, (uintptr_t)&D3D12Hook::set_render_targets);
+//            m_commandlist_hook->hook_method(22, (uintptr_t)&D3D12Hook::set_scissor_rects);
+        }
+
 //        spdlog::info("Dispatch offset: 14, ExecuteIndirect offset: 59");
         // we hook Dispatch and ExecuteIndirect because they are called after SetRenderTargets
-//        m_set_render_targets_hook = std::make_unique<PointerHook>(&set_render_targets_fn, (void*)&D3D12Hook::set_render_targets);
+        m_set_render_targets_hook = std::make_unique<PointerHook>(&set_render_targets_fn, (void*)&D3D12Hook::set_render_targets);
+        m_on_set_scissor_rects_hook = std::make_unique<PointerHook>(&set_scissor_rects_fn, (void*)&D3D12Hook::set_scissor_rects);
+        m_set_viewports_hook = std::make_unique<PointerHook>(&set_viewports_fn, (void*)&D3D12Hook::set_viewports);
 //        m_commandlist_dispatch_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[14], (void*)&D3D12Hook::dispatch);
 //        m_commandlist_execute_indirect_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[59], (void*)&D3D12Hook::execute_indirect);
 //        m_commandlist_resource_barriers_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[Barriers], (void*)&D3D12Hook::resource_barriers);
+//        m_set_pipeline_state_hook =  std::make_unique<PointerHook>(&set_pipeline_state_fn, (void*)&D3D12Hook::set_pipeline_state);
 
 //        auto& create_commited_resource_fn = (*(void***)device)[27];
 //        m_create_commited_resource_hook = std::make_unique<PointerHook>(&create_commited_resource_fn, (void*)&D3D12Hook::create_committed_resource);
 //        auto& create_depth_stencil_view_fn = (*(void***)device)[21];
 //        m_create_depth_stencil_view_hook = std::make_unique<PointerHook>(&create_depth_stencil_view_fn, (void*)&D3D12Hook::create_depth_stencil_view);
+        auto& create_render_target_view_fn = (*(void***)device)[20];
+        m_create_render_target_view_hook = std::make_unique<PointerHook>(&create_render_target_view_fn, (void*)&D3D12Hook::create_render_target_view);
+//        auto& create_graphics_pipeline_state_fn = (*(void***)device)[10];
+//        m_create_graphics_pipeline_state_hook = std::make_unique<PointerHook>(&create_graphics_pipeline_state_fn, (void*)&D3D12Hook::create_graphics_pipeline_state);
+
 
         m_hooked = true;
     } catch (const std::exception& e) {
@@ -375,6 +396,7 @@ bool D3D12Hook::unhook() {
 
     m_present_hook.reset();
     m_swapchain_hook.reset();
+//    m_commandlist_hook.reset();
     m_last_used_dsv_resource = nullptr;
 //    m_last_used_dsv_handle = nullptr;
 //    m_dsv_to_resource.clear();
@@ -701,22 +723,14 @@ HRESULT WINAPI D3D12Hook::resize_target(IDXGISwapChain3* swap_chain, const DXGI_
     return result;
 }
 
-void D3D12Hook::set_render_targets(ID3D12GraphicsCommandList* cmd_list, UINT NumRenderTargetDescriptors, const D3D12_CPU_DESCRIPTOR_HANDLE* pRenderTargetDescriptors,
+void D3D12Hook::set_render_targets(ID3D12GraphicsCommandList5* cmd_list, UINT NumRenderTargetDescriptors, const D3D12_CPU_DESCRIPTOR_HANDLE* pRenderTargetDescriptors,
                                    BOOL RTsSingleHandleToDescriptorRange, D3D12_CPU_DESCRIPTOR_HANDLE* depth_stencil_descriptor)
 {
     auto d3d12 = g_d3d12_hook;
-
-    if(depth_stencil_descriptor != nullptr) {
-        if(d3d12->m_dsv_to_resource.find(depth_stencil_descriptor->ptr) != d3d12->m_dsv_to_resource.end()) {
-            D3D12_RESOURCE_DESC desc = d3d12->m_dsvs[depth_stencil_descriptor->ptr];
-            auto pResource = d3d12->m_dsv_to_resource[depth_stencil_descriptor->ptr];
-//            d3d12->m_last_used_dsv_handle = depth_stencil_descriptor;
-            d3d12->m_last_used_dsv_resource = pResource;
-//            spdlog::info("D3D12 set render targets called dsv[{:x}] width[{}] height[{}] format[{}] renderer w[{}] h [{}]", depth_stencil_descriptor->ptr, desc.Width, desc.Height, desc.Format, g_d3d12_hook->m_render_width, g_d3d12_hook->m_render_height);
-        }
-//        spdlog::info("D3D12 set render targets called dsv[{:x}]", depth_stencil_descriptor->ptr);
-    }
     auto set_render_targets_fn = g_d3d12_hook->m_set_render_targets_hook->get_original<decltype(D3D12Hook::set_render_targets)*>();
+    if (d3d12->m_on_set_render_targets) {
+        d3d12->m_on_set_render_targets(*d3d12, cmd_list, NumRenderTargetDescriptors, pRenderTargetDescriptors, RTsSingleHandleToDescriptorRange, depth_stencil_descriptor);
+    }
     set_render_targets_fn(cmd_list, NumRenderTargetDescriptors, pRenderTargetDescriptors, RTsSingleHandleToDescriptorRange, depth_stencil_descriptor);
 }
 
@@ -728,13 +742,13 @@ void D3D12Hook::create_depth_stencil_view(ID3D12Device* device, ID3D12Resource* 
 {
     auto create_depth_stencil_view_fn = g_d3d12_hook->m_create_depth_stencil_view_hook->get_original<decltype(D3D12Hook::create_depth_stencil_view)*>();
     create_depth_stencil_view_fn(device, pResource, pDesc, DestDescriptor);
-    auto d3d12 = g_d3d12_hook;
-    auto desc = pResource->GetDesc();
-    if((pDesc->Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT || desc.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT) && matches_texture_size(desc.Width, desc.Height,  d3d12->m_render_width, d3d12->m_render_height)) {
-        d3d12->m_dsvs[DestDescriptor.ptr] = desc;
-        d3d12->m_dsv_to_resource[DestDescriptor.ptr] = pResource;
-//        spdlog::info("D3D12 create depth stencil view called format[{}] rFormat[{}]  dimension[{}] flags[{}] width[{}] height[{}] renderer W[{}] H[{}] dsv_handle[{:x}] resrouce[{}]" , pDesc->Format, desc.Format,  pDesc->ViewDimension, pDesc->Flags, desc.Width, desc.Height, d3d12->m_render_width, d3d12->m_render_height, DestDescriptor.ptr, fmt::ptr(pResource));
-    }
+//    auto d3d12 = g_d3d12_hook;
+//    auto desc = pResource->GetDesc();
+//    if((pDesc->Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT || desc.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT) && matches_texture_size(desc.Width, desc.Height,  d3d12->m_render_width, d3d12->m_render_height)) {
+//        d3d12->m_dsvs[DestDescriptor.ptr] = desc;
+//        d3d12->m_dsv_to_resource[DestDescriptor.ptr] = pResource;
+////        spdlog::info("D3D12 create depth stencil view called format[{}] rFormat[{}]  dimension[{}] flags[{}] width[{}] height[{}] renderer W[{}] H[{}] dsv_handle[{:x}] resrouce[{}]" , pDesc->Format, desc.Format,  pDesc->ViewDimension, pDesc->Flags, desc.Width, desc.Height, d3d12->m_render_width, d3d12->m_render_height, DestDescriptor.ptr, fmt::ptr(pResource));
+//    }
 }
 
 HRESULT D3D12Hook::create_committed_resource(ID3D12Device* device, const D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC* pDesc,
@@ -749,6 +763,110 @@ HRESULT D3D12Hook::create_committed_resource(ID3D12Device* device, const D3D12_H
 
     return result;
 }
+
+void D3D12Hook::set_scissor_rects(ID3D12GraphicsCommandList5* cmd_list, UINT NumRects, const D3D12_RECT* pRects) {
+    auto d3d12 = g_d3d12_hook;
+
+    auto on_set_scissor_rects_original_fn = d3d12->m_on_set_scissor_rects_hook->get_original<decltype(D3D12Hook::set_scissor_rects)*>();
+    if(d3d12->m_on_set_scissor_rects) {
+        d3d12->m_on_set_scissor_rects(*d3d12, cmd_list, NumRects, pRects);
+    }
+    on_set_scissor_rects_original_fn(cmd_list, NumRects, pRects);
+}
+
+void D3D12Hook::set_viewports(ID3D12GraphicsCommandList5* cmd_list, UINT NumViewports, const D3D12_VIEWPORT* pViewports) {
+    auto d3d12 = g_d3d12_hook;
+    auto set_viewports_original_fn = d3d12->m_set_viewports_hook->get_original<decltype(D3D12Hook::set_viewports)*>();
+    
+    if(d3d12->m_on_set_viewports) {
+        d3d12->m_on_set_viewports(*d3d12, cmd_list, NumViewports, pViewports);
+    }
+    
+    set_viewports_original_fn(cmd_list, NumViewports, pViewports);
+}
+
+void D3D12Hook::create_render_target_view(ID3D12Device* device, ID3D12Resource* pResource, const D3D12_RENDER_TARGET_VIEW_DESC* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+    auto d3d12 = g_d3d12_hook;
+    auto create_render_target_view_fn = d3d12->m_create_render_target_view_hook->get_original<decltype(D3D12Hook::create_render_target_view)*>();
+    create_render_target_view_fn(device, pResource, pDesc, DestDescriptor);
+    if (d3d12->m_on_create_render_target_view) {
+        d3d12->m_on_create_render_target_view(*d3d12, device, pResource, pDesc, DestDescriptor);
+    }
+}
+
+//HRESULT D3D12Hook::create_graphics_pipeline_state(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC * pDesc, const IID& riid, void** ppPipelineState)
+//{
+//    auto create_pipeline_state_fn = g_d3d12_hook->m_create_graphics_pipeline_state_hook->get_original<decltype(D3D12Hook::create_graphics_pipeline_state)*>();
+//    auto result = create_pipeline_state_fn(device, pDesc, riid, ppPipelineState);
+////    pso_to_desc[uintptr_t(*ppPipelineState)] = *pDesc;
+////    log_pso_fingerprint(pDesc);
+//    return result;
+//}
+//
+//bool is_pso_a_ui_pass(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc)
+//{
+//    // A UI pass must write to exactly one render target.
+//    if (desc->NumRenderTargets != 1) return false;
+//
+//    // Rule 1: Must use standard alpha blending.
+//    if (!desc->BlendState.RenderTarget[0].BlendEnable) return false;
+//    const auto& rt_blend = desc->BlendState.RenderTarget[0];
+//    if (rt_blend.SrcBlend != D3D12_BLEND_SRC_ALPHA ||
+//        rt_blend.DestBlend != D3D12_BLEND_INV_SRC_ALPHA ||
+//        rt_blend.BlendOp != D3D12_BLEND_OP_ADD) {
+//        return false;
+//    }
+//
+//    // Rule 2: Must not write to the depth buffer.
+//    if (desc->DepthStencilState.DepthWriteMask != D3D12_DEPTH_WRITE_MASK_ZERO) return false;
+//    // This is almost certainly a UI PSO.
+//    return true;
+//}
+//
+//bool is_pso_eligible_for_vrs(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc)
+//{
+//    // --- Universal Exclusions ---
+//    if (desc->RasterizerState.FillMode != D3D12_FILL_MODE_SOLID) return false;
+//    if (desc->PS.pShaderBytecode == nullptr || desc->PS.BytecodeLength == 0) return false;
+//    if (desc->RasterizerState.DepthBias != 0 || desc->RasterizerState.SlopeScaledDepthBias != 0.0f) return false; // Exclude shadows
+//
+//    // --- The NEW UI Exclusion ---
+//    // The most important new rule, based on your findings.
+//    if (is_pso_a_ui_pass(desc)) {
+//        return false;
+//    }
+//
+//    // If it's not a shadow pass and not a UI pass, it's a candidate.
+//    // This now correctly includes both the MRT G-Buffer pass AND the heavy single-RT lighting pass.
+//    return true;
+//}
+
+//void D3D12Hook::set_pipeline_state(ID3D12GraphicsCommandList* cmd_list, ID3D12PipelineState* pPipelineState) {
+//    auto d3d12 = g_d3d12_hook;
+//    auto set_pipeline_state_original_fn = d3d12->m_set_pipeline_state_hook->get_original<decltype(D3D12Hook::set_pipeline_state)*>();
+//
+//    ID3D12GraphicsCommandList5* cmd_list5 = nullptr;
+//    cmd_list->QueryInterface(IID_PPV_ARGS(&cmd_list5));
+//    static const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = {
+//        D3D12_SHADING_RATE_COMBINER_MAX, D3D12_SHADING_RATE_COMBINER_MAX};
+//    ID3D12Resource* pVRSResource = current_shading_image;
+//    bool test_pso = pVRSResource && ModSettings::g_internalSettings.useVRS && cmd_list5 && five_rtv;
+//    bool clean_vrs = false;
+//    if(test_pso) {
+//        if(get_pso_blob_size(pPipelineState) > ModSettings::g_internalSettings.psoSizeThreshold) {
+//            cmd_list5->RSSetShadingRateImage(nullptr);
+//        } else {
+//            cmd_list5->RSSetShadingRateImage(pVRSResource);
+//        }
+//    }
+////    spdlog::info("D3D12 set pipeline state called pass[{}] apply_vrs[{}]", pass_number, apply_vrs);
+//    if(cmd_list5) {
+//        cmd_list5->Release();
+//    }
+//    set_pipeline_state_original_fn(cmd_list, pPipelineState);
+//}
+
 //
 //void D3D12Hook::dispatch(ID3D12GraphicsCommandList* cmd_list, UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ) {
 //    auto d3d12 = g_d3d12_hook;

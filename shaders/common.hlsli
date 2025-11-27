@@ -1,11 +1,3 @@
-cbuffer Constants : register(b0)
-{
-    int    w_width;
-    int    w_height;
-    int    frame_count;
-    int    apply_fix;
-}
-
 struct CommonVertex
 {
 	float4 position : SV_POSITION;

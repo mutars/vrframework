@@ -1,32 +1,32 @@
 #include "ShaderDebugOverlay.h"
 #include <../../../directxtk12-src/Src/PlatformHelpers.h>
 #include <../../../_deps/directxtk12-src/Src/d3dx12.h>
+#include <Framework.hpp>
 #include <ModSettings.h>
 #include <d3d12.h>
+#include <imgui.h>
 #include <mods/VR.hpp>
+#include <nvidia/UpscalerAfrNvidiaModule.h>
 
 #ifdef COMPILE_SHADERS
 namespace shaders::debug {
     #include "debug_layer_ps.h"
     #include "debug_layer_vs.h"
 }
-
 #endif
 
 struct ShaderConstants {
-    int width;
-    int height;
-    uint32_t frame_count;
-    int apply_fix;
+    float scale;           // Scale factor for visualization
+    uint32_t channel_mask; // Bitmask: bit0=R, bit1=G, bit2=B, bit3=A
+    uint32_t show_abs;     // Show absolute values
+    uint32_t padding;      // Padding for alignment
 };
-
-ShaderConstants g_shader_constants{};
 
 bool ShaderDebugOverlay::CreateRootSignature(ID3D12Device* device)
 {
-    HRESULT                 hr;
+    HRESULT hr;
     CD3DX12_DESCRIPTOR_RANGE1 descriptorRange[1];
-    CD3DX12_ROOT_PARAMETER1   rootParams[2];
+    CD3DX12_ROOT_PARAMETER1 rootParams[2];
 
     descriptorRange[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_HEAP::COUNT, 0, 0);
     rootParams[0].InitAsDescriptorTable(1, &descriptorRange[0], D3D12_SHADER_VISIBILITY_PIXEL);
@@ -52,16 +52,19 @@ bool ShaderDebugOverlay::CreateRootSignature(ID3D12Device* device)
     hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_1, signature.GetAddressOf(), error.GetAddressOf());
     if (FAILED(hr)) {
         if (error)
-            spdlog::error("Error: D3DX12SerializeVersionedRootSignature {}", static_cast<char*>(error->GetBufferPointer()));
+            spdlog::error("[ShaderDebug] Error: D3DX12SerializeVersionedRootSignature {}", 
+                         static_cast<char*>(error->GetBufferPointer()));
         return false;
     }
-    hr = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(m_rootSignature.GetAddressOf()));
+    
+    hr = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), 
+                                     IID_PPV_ARGS(m_rootSignature.GetAddressOf()));
     if (FAILED(hr)) {
-        if (error)
-            spdlog::error("Error: CreateRootSignature {}", static_cast<char*>(error->GetBufferPointer()));
+        spdlog::error("[ShaderDebug] Error: CreateRootSignature failed");
         return false;
     }
-    spdlog::info("[VR] Debug Layer root signature created.");
+    
+    spdlog::info("[ShaderDebug] Root signature created.");
     return true;
 }
 
@@ -103,13 +106,17 @@ D3D12_SHADER_RESOURCE_VIEW_DESC getSRVdesc1(const D3D12_RESOURCE_DESC& desc) {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Texture2D.MipLevels = desc.MipLevels;
-    srvDesc.Texture2D.MostDetailedMip = 0; // Start viewing from the highest resolution mip
+    srvDesc.Texture2D.MostDetailedMip = 0;
     return srvDesc;
 }
 
-void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Resource* backbuffer, D3D12_CPU_DESCRIPTOR_HANDLE* rtv_handle) {
-    static auto mvReprojection = MotionVectorReprojection::Get();
-    if(!ModSettings::g_internalSettings.debugShaders || !mvReprojection->isValid()) {
+void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv_handle) {
+    if (!m_initialized) {
+        return;
+    }
+    
+    auto& mvReprojection = UpscalerAfrNvidiaModule::Get()->getMotionVectorReprojection();
+    if (!mvReprojection.isValid()) {
         return;
     }
 
@@ -120,54 +127,52 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
 
 //    mvReprojection->commandContext.wait(10);
 
-    const auto render_target_desc = backbuffer->GetDesc();
+    const auto render_target_desc = resource->GetDesc();
 
     {
         D3D12_RESOURCE_BARRIER barriers[5]
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+            CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
         };
         commandList->ResourceBarrier(5, barriers);
     }
 
     float clear_color[4]{ 0.0f, 0.0f, 0.0f, 0.0f };
 
-//    const auto& depthDesc      = mvReprojection->m_depth_buffer[0]->GetDesc();
+//    const auto& depthDesc      = mvReprojection.m_depth_buffer[0]->GetDesc();
 //    auto depth_srv_desc = getSRVdesc1(depthDesc);
     static auto vr = VR::get();
-    const auto& mvectorDesc = mvReprojection->m_motion_vector_buffer[vr->m_presenter_frame_count % 4]->GetDesc();
+    const auto& mvectorDesc = mvReprojection.m_motion_vector_buffer[vr->m_presenter_frame_count % 4]->GetDesc();
     auto mvector_srv_desc = getSRVdesc1(mvectorDesc);
 
-    device->CreateShaderResourceView(mvReprojection->m_motion_vector_buffer[(vr->m_presenter_frame_count)% 4].Get(), &mvector_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::MVEC));
+    device->CreateShaderResourceView(mvReprojection.m_motion_vector_buffer[(vr->m_presenter_frame_count)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
 //    device->CreateShaderResourceView(mvReprojection->m_depth_buffer[0].Get(), &depth_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::DEPTH));
 //    device->CreateShaderResourceView(mvReprojection->m_motion_vector_buffer[2].Get(), &mvector_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::MVEC_PROCESSED));
 
     D3D12_VIEWPORT viewport{};
-    viewport.Width    = (float)render_target_desc.Width/2;
-    viewport.Height   = (float)render_target_desc.Height;
+    viewport.Width    = (float)m_debug_width;
+    viewport.Height   = (float)m_debug_height;
     viewport.MinDepth = D3D12_MIN_DEPTH;
     viewport.MaxDepth = D3D12_MAX_DEPTH;
 
     D3D12_RECT scissor_rect{};
     scissor_rect.left   = 0;
     scissor_rect.top    = 0;
-    scissor_rect.right  = (LONG)render_target_desc.Width/2;
-    scissor_rect.bottom = (LONG)render_target_desc.Height;
+    scissor_rect.right  = (LONG)m_debug_width;
+    scissor_rect.bottom = (LONG)m_debug_height;
 
 
-    auto constants = g_shader_constants;
-
-    auto rpc_window_size
-        = XMFLOAT4(1.0f / ((float)render_target_desc.Width), 1.0f / ((float)render_target_desc.Height),
-                   ((float)render_target_desc.Width), ((float)render_target_desc.Height));
-
+    static ShaderConstants constants{};
+    constants.scale = m_scale;
+    constants.channel_mask = m_channel_mask;
+    constants.show_abs = m_show_abs ? 1 : 0;
 
     commandList->SetPipelineState(m_debug_layer_pso.Get());
 //    commandList->ClearRenderTargetView(*rtv_handle, clear_color, 1, &scissor_rect);
@@ -179,12 +184,12 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
-    commandList->SetGraphicsRoot32BitConstants(1, 4, &g_shader_constants, 0);
+    commandList->SetGraphicsRoot32BitConstants(1, 4, &constants, 0);
 
-    ID3D12DescriptorHeap* descriptorHeaps[] = { m_debug_heap->Heap()
+    ID3D12DescriptorHeap* descriptorHeaps[] = { m_srv_heap->Heap()
     };
     commandList->SetDescriptorHeaps(1, descriptorHeaps);
-    commandList->SetGraphicsRootDescriptorTable(0, m_debug_heap->GetFirstGpuHandle());
+    commandList->SetGraphicsRootDescriptorTable(0, m_srv_heap->GetFirstGpuHandle());
 
     // Draw the quad
     commandList->DrawInstanced(6, 1, 0, 0);
@@ -192,25 +197,28 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
     {
         D3D12_RESOURCE_BARRIER barriers[5]
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection->m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ)
+            CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ)
         };
         commandList->ResourceBarrier(5, barriers);
     }
 }
 
-bool ShaderDebugOverlay::setup(ID3D12Device* device, D3D12_RESOURCE_DESC backBuffer_desc)
+bool ShaderDebugOverlay::setup(ID3D12Device* device, D3D12_RESOURCE_DESC& backBufferDesc)
 {
     try {
-        m_debug_heap = std::make_unique<DirectX::DescriptorHeap>(device,
+        m_srv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
                                                                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                                                                    D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, SRV_HEAP::COUNT);
+        m_rtv_heap = std::make_unique<DirectX::DescriptorHeap>(device,
+                                                                   D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                                                                   D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 1);
 
     } catch(...) {
         spdlog::error("Failed to create SRV/RTV descriptor heap for MotionVectorFix");
@@ -218,10 +226,126 @@ bool ShaderDebugOverlay::setup(ID3D12Device* device, D3D12_RESOURCE_DESC backBuf
     }
 
     if (!CreateRootSignature(device) ||
-        !CreatePipelineStates(device, DXGI_FORMAT_R10G10B10A2_UNORM))
+        !CreatePipelineStates(device, backBufferDesc.Format))
     {
         spdlog::error("Failed to setup MotionVectorFix");
         return false;
     }
+
+    if(!m_commandContext.setup(L"ShaderDebugOverlay")) {
+        spdlog::error("Failed to setup command context for ShaderDebugOverlay");
+        return false;
+    }
+    
+    // Create debug texture at half resolution
+    m_debug_width = (UINT)backBufferDesc.Width / 2;
+    m_debug_height = (UINT)backBufferDesc.Height / 2;
+    
+    D3D12_RESOURCE_DESC texDesc{};
+    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    texDesc.Width = m_debug_width;
+    texDesc.Height = m_debug_height;
+    texDesc.DepthOrArraySize = 1;
+    texDesc.MipLevels = 1;
+    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    D3D12_HEAP_PROPERTIES heapProps{};
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    if (FAILED(device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
+                                                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                IID_PPV_ARGS(m_image1.GetAddressOf())))) {
+        spdlog::error("Failed to create debug texture");
+        return false;
+    }
+
+    auto srv_desc = getSRVdesc1(texDesc);
+
+    device->CreateRenderTargetView(m_image1.Get(), nullptr, m_rtv_heap->GetCpuHandle(0));
+    device->CreateShaderResourceView(m_image1.Get(), &srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC_PROCESSED));
+    
+    m_initialized = true;
+    spdlog::info("[ShaderDebug] Initialized with debug texture {}x{}", m_debug_width, m_debug_height);
     return true;
+}
+
+void ShaderDebugOverlay::on_pre_imgui_frame()
+{
+    if (m_initialized && ModSettings::g_internalSettings.debugShaders) {
+        const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle = m_rtv_heap->GetCpuHandle(0);
+        Draw(m_commandContext.cmd_list.Get(), m_image1.Get(), &cpuHandle);
+        m_commandContext.has_commands = true;
+        m_commandContext.execute();
+    }
+}
+
+void ShaderDebugOverlay::on_draw_ui()
+{
+    if (!ImGui::CollapsingHeader(get_name().data())) {
+        return;
+    }
+
+    ImGui::Checkbox("Enable Shader Debug Overlay", &ModSettings::g_internalSettings.debugShaders);
+    
+    if (!m_initialized || !m_image1) {
+        ImGui::Text("Debug texture not ready");
+        return;
+    }
+    
+    if (!ModSettings::g_internalSettings.debugShaders) {
+        ImGui::Text("Enable debugShaders in settings to see output");
+        return;
+    }
+
+    // Shader configuration controls
+    ImGui::SliderFloat("Scale", &m_scale, 1.0f, 100.0f, "%.1f");
+    ImGui::Checkbox("Show Absolute Values", &m_show_abs);
+    
+    bool ch_r = (m_channel_mask & 0x1) != 0;
+    bool ch_g = (m_channel_mask & 0x2) != 0;
+    bool ch_b = (m_channel_mask & 0x4) != 0;
+    bool ch_a = (m_channel_mask & 0x8) != 0;
+    
+    if (ImGui::Checkbox("R", &ch_r)) m_channel_mask = (m_channel_mask & ~0x1) | (ch_r ? 0x1 : 0);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("G", &ch_g)) m_channel_mask = (m_channel_mask & ~0x2) | (ch_g ? 0x2 : 0);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("B", &ch_b)) m_channel_mask = (m_channel_mask & ~0x4) | (ch_b ? 0x4 : 0);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("A", &ch_a)) m_channel_mask = (m_channel_mask & ~0x8) | (ch_a ? 0x8 : 0);
+    
+    ImGui::Text("Size: %u x %u", m_debug_width, m_debug_height);
+
+    // Get main window position to place debug window next to it
+    ImVec2 mainWindowPos = ImGui::GetWindowPos();
+    ImVec2 mainWindowSize = ImGui::GetWindowSize();
+    
+    // Calculate debug window position (to the right of main window)
+    ImVec2 debugWindowPos = ImVec2(mainWindowPos.x + mainWindowSize.x + 10.0f, mainWindowPos.y);
+    
+    const float defaultWidth = static_cast<float>(m_debug_width);
+    const float defaultHeight = static_cast<float>(m_debug_height);
+    
+    ImGui::SetNextWindowPos(debugWindowPos, ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(defaultWidth + 20.0f, defaultHeight + 40.0f), ImGuiCond_Once);
+    
+    if (ImGui::Begin("Debug Texture View", &ModSettings::g_internalSettings.debugShaders)) {
+        // Get available content region and scale image to fit
+        ImVec2 availableSize = ImGui::GetContentRegionAvail();
+        float aspectRatio = static_cast<float>(m_debug_width) / static_cast<float>(m_debug_height);
+        
+        float displayWidth = availableSize.x;
+        float displayHeight = displayWidth / aspectRatio;
+        
+        // If height exceeds available, scale by height instead
+        if (displayHeight > availableSize.y) {
+            displayHeight = availableSize.y;
+            displayWidth = displayHeight * aspectRatio;
+        }
+        
+        ImGui::Image((ImTextureID)m_srv_heap->GetGpuHandle(SRV_HEAP::MVEC_PROCESSED).ptr, ImVec2(displayWidth, displayHeight));
+    }
+    ImGui::End();
 }
