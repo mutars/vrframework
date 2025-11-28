@@ -96,10 +96,8 @@ and place the openxr_loader.dll in the same folder.)";
         "get_right_stick_axis", &VR::get_right_stick_axis,
         "get_current_eye_transform", &VR::get_current_eye_transform,
         "get_current_projection_matrix", &VR::get_current_projection_matrix,
-        "get_standing_origin", &VR::get_standing_origin,
-        "set_standing_origin", &VR::set_standing_origin,
-        "get_rotation_offset", &VR::get_rotation_offset,
-        "set_rotation_offset", &VR::set_rotation_offset,
+        "get_transform_offset", &VR::get_transform_offset,
+        "set_transform_offset", &VR::set_transform_offset,
         "recenter_view", &VR::recenter_view,
         "get_gui_rotation_offset", &VR::get_gui_rotation_offset,
         "set_gui_rotation_offset", &VR::set_gui_rotation_offset,
@@ -614,10 +612,7 @@ void VR::update_hmd_state() {
     // If we used the data directly from the WaitGetPoses call, we would have to lock a different mutex and wait a long time
     // This is because the WaitGetPoses call is blocking, and we don't want to block any game logic
     if (runtime->wants_reset_origin && runtime->ready() && runtime->got_first_valid_poses) {
-        std::unique_lock _{ runtime->pose_mtx };
-        set_rotation_offset(glm::identity<glm::quat>());
-        m_standing_origin = get_position_unsafe(vr::k_unTrackedDeviceIndex_Hmd);
-
+        recenter_view();
         runtime->wants_reset_origin = false;
     }
 
@@ -683,10 +678,6 @@ void VR::update_action_states() {
     if (m_recenter_view_key->is_key_down_once()) {
         recenter_view();
     }
-
-    if (m_set_standing_key->is_key_down_once()) {
-        set_standing_origin(get_position(0));
-    }
 }
 
 
@@ -726,40 +717,20 @@ bool VR::is_hand_behind_head(VRRuntime::Hand hand, float sensitivity) const {
     return hand_dot_flat_raw >= sensitivity;
 }
 
-float VR::get_standing_height() {
-    std::shared_lock _{ get_runtime()->pose_mtx };
-
-    return m_standing_origin.y;
-}
-
-Vector4f VR::get_standing_origin() {
-    std::shared_lock _{ get_runtime()->pose_mtx };
-
-    return m_standing_origin;
-}
-
-void VR::set_standing_origin(const Vector4f& origin) {
-    std::unique_lock _{ get_runtime()->pose_mtx };
-    
-    m_standing_origin = origin;
-}
-
-glm::quat VR::get_rotation_offset() {
+Matrix4x4f VR::get_transform_offset() {
     std::shared_lock _{ m_rotation_mtx };
 
-    return m_rotation_offset;
+    return m_transform_offset;
 }
 
-void VR::set_rotation_offset(const glm::quat& offset) {
+void VR::set_transform_offset(const Matrix4x4f& offset) {
     std::unique_lock _{ m_rotation_mtx };
 
-    m_rotation_offset = offset;
+    m_transform_offset = offset;
 }
 
 void VR::recenter_view() {
-    const auto new_rotation_offset = glm::normalize(glm::inverse(utility::math::flatten(glm::quat{get_rotation(0)})));
-
-    set_rotation_offset(new_rotation_offset);
+    set_transform_offset(glm::inverse(get_transform(0)));
 }
 
 glm::quat VR::get_gui_rotation_offset() {
@@ -1413,16 +1384,6 @@ void VR::on_draw_ui() {
     }
     ImGui::Separator();
 
-    if (ImGui::Button("Set Standing Origin") || m_set_standing_key->is_key_down_once()) {
-        m_standing_origin = get_position(0);
-    }
-/*
-    if (ImGui::Button("Set Standing Height")) {
-        m_standing_origin.y = get_position(0).y;
-    }
-*/
-
-
     if (ImGui::Button("Recenter View") || m_recenter_view_key->is_key_down_once()) {
         recenter_view();
     }
@@ -1436,7 +1397,6 @@ void VR::on_draw_ui() {
 
     ImGui::Separator();
 
-    m_set_standing_key->draw("Set Standing Origin Key");
     m_recenter_view_key->draw("Recenter View Key");
 
     ImGui::Separator();

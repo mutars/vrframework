@@ -145,12 +145,8 @@ public:
     }
 
     // Functions that generally use a mutex or have more complex logic
-    float get_standing_height();
-    Vector4f get_standing_origin();
-    void set_standing_origin(const Vector4f& origin);
-
-    glm::quat get_rotation_offset();
-    void set_rotation_offset(const glm::quat& offset);
+    Matrix4x4f get_transform_offset();
+    void set_transform_offset(const Matrix4x4f& offset);
     void recenter_view();
 
     glm::quat get_gui_rotation_offset();
@@ -437,8 +433,7 @@ private:
     std::shared_ptr<runtimes::OpenVR> m_openvr{std::make_shared<runtimes::OpenVR>()};
     std::shared_ptr<runtimes::OpenXR> m_openxr{std::make_shared<runtimes::OpenXR>()};
 
-    Vector4f m_standing_origin{ 0.0f, 1.5f, 0.0f, 0.0f };
-    glm::quat m_rotation_offset{ glm::identity<glm::quat>() };
+    Matrix4x4f m_transform_offset{ glm::identity<Matrix4x4f>() };
     glm::quat m_gui_rotation_offset{ glm::identity<glm::quat>() };
 
     std::vector<int32_t> m_controllers{};
@@ -608,7 +603,6 @@ private:
 
     const ModCombo::Ptr m_sync_interval{ ModCombo::create(generate_name("SyncInterval"), s_sync_interval_options, 0) };
 
-    const ModKey::Ptr m_set_standing_key{ ModKey::create(generate_name("SetStandingOriginKey")) };
     const ModKey::Ptr m_recenter_view_key{ ModKey::create(generate_name("RecenterViewKey")) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
     const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), true) };
@@ -647,7 +641,6 @@ private:
     bool m_disable_post_effect_fix{false};
 
     ValueList m_options{
-        *m_set_standing_key,
         *m_recenter_view_key,
 //        *m_decoupled_pitch,
 //        *m_use_afr,

@@ -1151,17 +1151,24 @@ void Framework::draw_ui() {
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // causes bugs with the cursor
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-    static bool joy_combo_pressed = false;
-    const bool both_sticks_clicked = ImGui::IsKeyDown(ImGuiKey_GamepadL3) && ImGui::IsKeyDown(ImGuiKey_GamepadR3);
+    static bool menu_button_was_pressed = false;
+    static std::chrono::steady_clock::time_point menu_button_press_start{};
+    const bool menu_button_pressed = ImGui::IsKeyDown(ImGuiKey_GamepadStart);
+    constexpr auto long_press_duration = std::chrono::seconds(2);
 
-    if (both_sticks_clicked && !joy_combo_pressed)
-    {
-        m_draw_ui = !m_draw_ui;
-        joy_combo_pressed = true;
-    }
-    else if (!both_sticks_clicked)
-    {
-        joy_combo_pressed = false;
+    if (menu_button_pressed) {
+        if (!menu_button_was_pressed) {
+            menu_button_press_start = std::chrono::steady_clock::now();
+            menu_button_was_pressed = true;
+        } else {
+            auto elapsed = std::chrono::steady_clock::now() - menu_button_press_start;
+            if (elapsed >= long_press_duration) {
+                m_draw_ui = !m_draw_ui;
+                menu_button_press_start = std::chrono::steady_clock::now();
+            }
+        }
+    } else {
+        menu_button_was_pressed = false;
     }
 
     if (!m_draw_ui) {
