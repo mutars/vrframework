@@ -4,7 +4,6 @@
 #include <aer/ConstantsPool.h>
 #include <d3d12.h>
 #include <mods/VR.hpp>
-
 #ifdef COMPILE_SHADERS
 namespace shaders::compute {
     #include "motion_vector_correction_cs.h"
@@ -12,7 +11,7 @@ namespace shaders::compute {
 #endif
 
 struct alignas(4) MotionVectorCorrectionConstants {
-    glm::mat4 correction{};
+    glm::mat4 undoCameraMotion{};
     glm::mat4 cameraMotionCorrection{};
     XMFLOAT4 texSize{};
 };
@@ -156,29 +155,8 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
     constants.texSize.z = 1.0f /  (float) desc.Width;
     constants.texSize.w = 1.0f /  (float) desc.Height;
 
-    static auto vr = VR::get();
-
-    glm::mat4 correction = glm::mat4(1.0f);
-    if(vr->is_hmd_active()) {
-        auto eye = GlobalPool::get_eye_view(frame);
-        auto past_eye = GlobalPool::get_eye_view(frame - 1);
-        if(frame % 2 == 0) {
-            auto hmd_transform = GlobalPool::get_hmd_view(frame);
-            auto hmd_transform_past = GlobalPool::get_hmd_view(frame - 2);
-            correction = eye * hmd_transform_past * glm::inverse(hmd_transform) * glm::inverse(past_eye);
-        } else {
-            correction = eye * glm::inverse(past_eye);
-        }
-    } else if(ModSettings::g_internalSettings.cameraShake) {
-        correction[3].x = 0.068f * (frame % 2 != 0 ? -1.0f : +1.0f);
-    }
-
-    auto& sl_constants_n_1           = GlobalPool::getSlConstants(frame - 1);
-    auto& sl_constants_n           = GlobalPool::getSlConstants(frame);
-    auto projection = *(glm::mat4*) &sl_constants_n.cameraViewToClip;
-    constants.correction = projection * correction * glm::inverse(projection);
-    constants.cameraMotionCorrection = *(glm::mat4 *)&sl_constants_n_1.prevClipToClip;
-
+    constants.undoCameraMotion = GlobalPool::get_correction_matrix((int)frame, ((int)frame - 1));
+    constants.cameraMotionCorrection = GlobalPool::get_correction_matrix((int)frame, ((int)frame - 2));
     cmd_list->SetComputeRoot32BitConstants(2, CONSTANTS_COUNT, &constants, 0);
 
     // Get dimensions for dispatch

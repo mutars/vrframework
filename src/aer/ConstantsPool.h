@@ -8,24 +8,21 @@ namespace GlobalPool
     struct Constants
     {
         glm::mat4     projection{ 1.0 };
-        glm::mat4     view{ 1.0f };
-        glm::mat4     eyeView{ 1.0f };
-        struct {
-            glm::mat4 prevClipToClip{1.0f};
-            glm::mat4 cameraViewToClip{1.0f};
-        } sl_constants{};
+        glm::mat4     finalView{ 1.0f };
     };
 
     extern Constants g_constants[CONSTANTS_HISTORY_SIZE];
 
-    inline void submit_hmd_view(const glm::mat4& view, int frame)
+    glm::mat4 get_correction_matrix(int frame, int past_frame);
+
+    inline void submit_projection(glm::mat4& projection, int frame)
     {
-        g_constants[frame % CONSTANTS_HISTORY_SIZE].view = view;
+        g_constants[frame % CONSTANTS_HISTORY_SIZE].projection = projection;
     }
 
-    inline void submit_eye_view(const glm::mat4& view, int frame)
+    inline void submit_final_view(glm::mat4& finalView, int frame)
     {
-        g_constants[frame % CONSTANTS_HISTORY_SIZE].eyeView = view;
+        g_constants[frame % CONSTANTS_HISTORY_SIZE].finalView = finalView;
     }
 
     inline auto& get_projection(int frame)
@@ -33,24 +30,9 @@ namespace GlobalPool
         return g_constants[frame % CONSTANTS_HISTORY_SIZE].projection;
     }
 
-    inline auto& get_hmd_view(int frame)
+    inline const auto& get_final_view(int frame)
     {
-        return g_constants[frame % CONSTANTS_HISTORY_SIZE].view;
-    }
-
-    inline auto& get_eye_view(int frame)
-    {
-        return g_constants[frame % CONSTANTS_HISTORY_SIZE].eyeView;
-    }
-
-//    inline void submitSlConstants(const sl::Constants& constants, uint32_t frame)
-//    {
-//        g_constants[frame % CONSTANTS_HISTORY_SIZE].sl_constants = constants;
-//    }
-
-    inline auto& getSlConstants(uint32_t frame)
-    {
-        return g_constants[frame % CONSTANTS_HISTORY_SIZE].sl_constants;
+        return g_constants[frame % CONSTANTS_HISTORY_SIZE].finalView;
     }
 
 }; // namespace GlobalPool

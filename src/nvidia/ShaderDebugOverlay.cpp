@@ -1,9 +1,10 @@
 #include "ShaderDebugOverlay.h"
-#include <../../../directxtk12-src/Src/PlatformHelpers.h>
 #include <../../../_deps/directxtk12-src/Src/d3dx12.h>
+#include <../../../directxtk12-src/Src/PlatformHelpers.h>
 #include <Framework.hpp>
 #include <ModSettings.h>
 #include <d3d12.h>
+#include <experimental/DebugUtils.h>
 #include <imgui.h>
 #include <mods/VR.hpp>
 #include <nvidia/UpscalerAfrNvidiaModule.h>
@@ -152,7 +153,9 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
     const auto& mvectorDesc = mvReprojection.m_motion_vector_buffer[vr->m_presenter_frame_count % 4]->GetDesc();
     auto mvector_srv_desc = getSRVdesc1(mvectorDesc);
 
-    device->CreateShaderResourceView(mvReprojection.m_motion_vector_buffer[(vr->m_presenter_frame_count)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
+    auto modulo_frame = vr->m_presenter_frame_count % 2 == 0 ? 0 : -1;
+
+    device->CreateShaderResourceView(mvReprojection.m_motion_vector_buffer[(vr->m_presenter_frame_count + modulo_frame)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
 //    device->CreateShaderResourceView(mvReprojection->m_depth_buffer[0].Get(), &depth_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::DEPTH));
 //    device->CreateShaderResourceView(mvReprojection->m_motion_vector_buffer[2].Get(), &mvector_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::MVEC_PROCESSED));
 
@@ -171,7 +174,7 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
 
     static ShaderConstants constants{};
     constants.scale = m_scale;
-    constants.channel_mask = m_channel_mask;
+    constants.channel_mask = m_debug_axis;
     constants.show_abs = m_show_abs ? 1 : 0;
 
     commandList->SetPipelineState(m_debug_layer_pso.Get());
@@ -273,7 +276,7 @@ bool ShaderDebugOverlay::setup(ID3D12Device* device, D3D12_RESOURCE_DESC& backBu
 
 void ShaderDebugOverlay::on_pre_imgui_frame()
 {
-    if (m_initialized && ModSettings::g_internalSettings.debugShaders) {
+    if (m_initialized && DebugUtils::config.debugShaders) {
         const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle = m_rtv_heap->GetCpuHandle(0);
         Draw(m_commandContext.cmd_list.Get(), m_image1.Get(), &cpuHandle);
         m_commandContext.has_commands = true;
@@ -287,14 +290,14 @@ void ShaderDebugOverlay::on_draw_ui()
         return;
     }
 
-    ImGui::Checkbox("Enable Shader Debug Overlay", &ModSettings::g_internalSettings.debugShaders);
+    ImGui::Checkbox("Enable Shader Debug Overlay", &DebugUtils::config.debugShaders);
     
     if (!m_initialized || !m_image1) {
         ImGui::Text("Debug texture not ready");
         return;
     }
     
-    if (!ModSettings::g_internalSettings.debugShaders) {
+    if (!DebugUtils::config.debugShaders) {
         ImGui::Text("Enable debugShaders in settings to see output");
         return;
     }
@@ -302,20 +305,9 @@ void ShaderDebugOverlay::on_draw_ui()
     // Shader configuration controls
     ImGui::SliderFloat("Scale", &m_scale, 1.0f, 100.0f, "%.1f");
     ImGui::Checkbox("Show Absolute Values", &m_show_abs);
-    
-    bool ch_r = (m_channel_mask & 0x1) != 0;
-    bool ch_g = (m_channel_mask & 0x2) != 0;
-    bool ch_b = (m_channel_mask & 0x4) != 0;
-    bool ch_a = (m_channel_mask & 0x8) != 0;
-    
-    if (ImGui::Checkbox("R", &ch_r)) m_channel_mask = (m_channel_mask & ~0x1) | (ch_r ? 0x1 : 0);
-    ImGui::SameLine();
-    if (ImGui::Checkbox("G", &ch_g)) m_channel_mask = (m_channel_mask & ~0x2) | (ch_g ? 0x2 : 0);
-    ImGui::SameLine();
-    if (ImGui::Checkbox("B", &ch_b)) m_channel_mask = (m_channel_mask & ~0x4) | (ch_b ? 0x4 : 0);
-    ImGui::SameLine();
-    if (ImGui::Checkbox("A", &ch_a)) m_channel_mask = (m_channel_mask & ~0x8) | (ch_a ? 0x8 : 0);
-    
+
+    ImGui::RadioButton("Debug Axis (X - positive R, negative G)", (int*)&m_debug_axis, 0);
+    ImGui::RadioButton("Debug Axis (Y - positive B, negative G)", (int*)&m_debug_axis, 1);
     ImGui::Text("Size: %u x %u", m_debug_width, m_debug_height);
 
     // Get main window position to place debug window next to it
@@ -331,7 +323,7 @@ void ShaderDebugOverlay::on_draw_ui()
     ImGui::SetNextWindowPos(debugWindowPos, ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(defaultWidth + 20.0f, defaultHeight + 40.0f), ImGuiCond_Once);
     
-    if (ImGui::Begin("Debug Texture View", &ModSettings::g_internalSettings.debugShaders)) {
+    if (ImGui::Begin("Debug Texture View", &DebugUtils::config.debugShaders)) {
         // Get available content region and scale image to fit
         ImVec2 availableSize = ImGui::GetContentRegionAvail();
         float aspectRatio = static_cast<float>(m_debug_width) / static_cast<float>(m_debug_height);

@@ -108,7 +108,7 @@ private:
     
     // Shader configuration
     float m_scale{40.0f};           // Scale factor for visualization
-    uint32_t m_channel_mask{0x7};   // Default: RGB enabled (bits: R=1, G=2, B=4, A=8)
+    uint8_t m_debug_axis;  // 0 - X, 1 - Y
     bool m_show_abs{true};          // Show absolute values
 
 };

@@ -1,10 +1,9 @@
 #include "UpscalerAfrNvidiaModule.h"
 #include "sl_matrix_helpers.h"
 #include <Framework.hpp>
-#include <ModSettings.h>
-#include <aer/ConstantsPool.h>
-#include <mods/VR.hpp>
+#include <experimental/DebugUtils.h>
 #include <imgui.h>
+#include <mods/VR.hpp>
 #include <spdlog/spdlog.h>
 
 std::optional<std::string> UpscalerAfrNvidiaModule::on_initialize()
@@ -169,9 +168,11 @@ void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame
         if(m_enabled->value() && m_motion_vector_fix->value()) {
             m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, frame, command_list);
         }
-        if(ModSettings::g_internalSettings.debugShaders && MotionVectorReprojection::ValidateResource(mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer)) {
+#ifdef _DEBUG
+        if(DebugUtils::config.debugShaders && MotionVectorReprojection::ValidateResource(mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer)) {
             MotionVectorReprojection::CopyResource(command_list, mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
         }
+#endif
     }
 }
 
@@ -244,9 +245,6 @@ sl::Result UpscalerAfrNvidiaModule::on_slSetConstants(sl::Constants& values, con
 {
     static auto instance = UpscalerAfrNvidiaModule::Get();
     static auto original_fn = instance->m_set_constants_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetConstants)>();
-    auto& sl_constants = GlobalPool::getSlConstants(frame);
-    sl_constants.cameraViewToClip = *(glm::mat4 *)&values.cameraViewToClip;
-    sl_constants.prevClipToClip = *(glm::mat4 *)&values.prevClipToClip;
     if(frame % 2 == 0 && instance->m_enabled->value()) {
         sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
         return original_fn(values, frame, afr_viewport_handle);

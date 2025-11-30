@@ -1,7 +1,7 @@
 cbuffer Constants : register(b0)
 {
-    float4x4 correctionMatrix;
-    float4x4 cameraMotionCorrectionMatrix;
+    float4x4 undoCameraMotion;
+    float4x4 cameraMotionCorrection;
     float4 textureSize;
 }
 
@@ -31,12 +31,13 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         float curDepth = depth[pixelId].x;
 
         float4 screenSpaceCurrent = float4(ssCurrent, curDepth, 1.0);
-        float4 screenSpaceEyeOffsetReprojected = mul(correctionMatrix, screenSpaceCurrent);
-        float2 ssEyeOffsetReprojected = screenSpaceEyeOffsetReprojected.xy / screenSpaceEyeOffsetReprojected.w;
-        float4 cameraPastFrameReprojected = mul(cameraMotionCorrectionMatrix, screenSpaceCurrent);
+        float4 screenSpace2FramesReprojected = mul(cameraMotionCorrection, screenSpaceCurrent);
+        float2 ss2FramesReprojected = screenSpace2FramesReprojected.xy / screenSpace2FramesReprojected.w;
+        float4 cameraPastFrameReprojected = mul(undoCameraMotion, screenSpaceCurrent);
         float2 ssCameraPastFrameReprojected = cameraPastFrameReprojected.xy / cameraPastFrameReprojected.w;
-        float2 eyeMotionVector = ssCurrent - ssEyeOffsetReprojected;
+        float2 twoFramesCameraVector = ssCurrent - ss2FramesReprojected;
         float2 cameraMotionVector = ssCurrent - ssCameraPastFrameReprojected;
-        mvec[pixelId] =  motionVector + eyeMotionVector * 1.0 + cameraMotionVector * 1.0;
+        motionVector = 2.0 * (motionVector - cameraMotionVector * 1.0);
+        mvec[pixelId] =  motionVector + twoFramesCameraVector * 1.0;
     }
 }
