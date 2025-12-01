@@ -54,7 +54,7 @@ WindowsMessageHook::WindowsMessageHook(HWND wnd)
 
     // Set it to our "hook" procedure.
     SetWindowLongPtr(m_wnd, GWLP_WNDPROC, (LONG_PTR)&window_proc);
-
+#ifndef DISABLE_WINDOW_SIZE_FIXES
     auto get_window_rect_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "GetWindowRect");
     m_get_window_rect_hook = safetyhook::create_inline((void*)get_window_rect_fn, onGetWindowRect);
     if (!m_get_window_rect_hook) {
@@ -84,6 +84,7 @@ WindowsMessageHook::WindowsMessageHook(HWND wnd)
     if (!m_clip_cursor_hook) {
         spdlog::error("Failed to hook ClipCursor");
     }
+#endif
     spdlog::info("Hooked Windows message handler");
 }
 
