@@ -328,24 +328,21 @@ bool D3D12Hook::hook() {
         auto& set_render_targets_fn = (*(void***)cmd_list)[46];
         auto& set_scissor_rects_fn = (*(void***)cmd_list)[22];
         auto& set_viewports_fn = (*(void***)cmd_list)[21];
+        auto& create_render_target_view_fn = (*(void***)device)[20];
 //        auto& set_pipeline_state_fn = (*(void***)cmd_list)[25];
 //        auto Barriers = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ResourceBarrier);
 //        spdlog::info("ResourceBarrier offset: {}", Barriers);
 //        auto ExecuteIndirectOff = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ExecuteIndirect);
-        if(cmd_list5) {
-//            m_commandlist_hook = std::make_unique<VtableHook>(cmd_list);
-//            //        m_commandlist_hook->hook_method(59, (uintptr_t)&D3D12Hook::execute_indirect);
-//            //        m_commandlist_hook->hook_method(14, (uintptr_t)&D3D12Hook::dispatch);
-//            m_commandlist_hook->hook_method(46, (uintptr_t)&D3D12Hook::set_render_targets);
-//            m_commandlist_hook->hook_method(22, (uintptr_t)&D3D12Hook::set_scissor_rects);
-        }
 
 //        spdlog::info("Dispatch offset: 14, ExecuteIndirect offset: 59");
         // we hook Dispatch and ExecuteIndirect because they are called after SetRenderTargets
+#ifdef VRMOD_EXPERIMENTAL
         m_set_render_targets_hook = std::make_unique<PointerHook>(&set_render_targets_fn, (void*)&D3D12Hook::set_render_targets);
         m_on_set_scissor_rects_hook = std::make_unique<PointerHook>(&set_scissor_rects_fn, (void*)&D3D12Hook::set_scissor_rects);
         m_set_viewports_hook = std::make_unique<PointerHook>(&set_viewports_fn, (void*)&D3D12Hook::set_viewports);
-//        m_commandlist_dispatch_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[14], (void*)&D3D12Hook::dispatch);
+        m_create_render_target_view_hook = std::make_unique<PointerHook>(&create_render_target_view_fn, (void*)&D3D12Hook::create_render_target_view);
+#endif
+        //        m_commandlist_dispatch_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[14], (void*)&D3D12Hook::dispatch);
 //        m_commandlist_execute_indirect_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[59], (void*)&D3D12Hook::execute_indirect);
 //        m_commandlist_resource_barriers_hook = std::make_unique<PointerHook>(&(*(void***)cmd_list)[Barriers], (void*)&D3D12Hook::resource_barriers);
 //        m_set_pipeline_state_hook =  std::make_unique<PointerHook>(&set_pipeline_state_fn, (void*)&D3D12Hook::set_pipeline_state);
@@ -354,8 +351,6 @@ bool D3D12Hook::hook() {
 //        m_create_commited_resource_hook = std::make_unique<PointerHook>(&create_commited_resource_fn, (void*)&D3D12Hook::create_committed_resource);
 //        auto& create_depth_stencil_view_fn = (*(void***)device)[21];
 //        m_create_depth_stencil_view_hook = std::make_unique<PointerHook>(&create_depth_stencil_view_fn, (void*)&D3D12Hook::create_depth_stencil_view);
-        auto& create_render_target_view_fn = (*(void***)device)[20];
-        m_create_render_target_view_hook = std::make_unique<PointerHook>(&create_render_target_view_fn, (void*)&D3D12Hook::create_render_target_view);
 //        auto& create_graphics_pipeline_state_fn = (*(void***)device)[10];
 //        m_create_graphics_pipeline_state_hook = std::make_unique<PointerHook>(&create_graphics_pipeline_state_fn, (void*)&D3D12Hook::create_graphics_pipeline_state);
 

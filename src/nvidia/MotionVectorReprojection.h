@@ -12,9 +12,6 @@ using namespace DirectX;
 class MotionVectorReprojection
 {
 public:
-    friend class UpscalerAfrNvidiaModule;
-    friend class ShaderDebugOverlay;
-
     MotionVectorReprojection() = default;
     ~MotionVectorReprojection() { Reset(); };
 
@@ -30,29 +27,12 @@ public:
         return true;
     }
 
-    inline bool isValid()
-    {
-        for (const auto& buffer : m_motion_vector_buffer) {
-            if (!buffer)
-                return false;
-        }
-        //        for (const auto& buffer : m_depth_buffer) {
-        //            if (!buffer) return false;
-        //        }
-        return true;
-    }
-
     inline void Reset()
     {
         m_initialized = false;
         m_compute_pso.Reset();
         m_computeRootSignature.Reset();
         m_compute_heap.reset();
-
-        m_motion_vector_buffer[0].Reset();
-        m_motion_vector_buffer[1].Reset();
-        m_motion_vector_buffer[2].Reset();
-        m_motion_vector_buffer[3].Reset();
         //        m_depth_buffer[0].Reset();
         //        m_depth_buffer[1].Reset();
         //        m_depth_buffer[2].Reset();
@@ -101,9 +81,6 @@ public:
         }
     }
 
-    static void CopyResource(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pSrcResource, ID3D12Resource* pDstResource, D3D12_RESOURCE_STATES srcState,
-                                    D3D12_RESOURCE_STATES dstState);
-
 private:
     enum SRV_UAV : unsigned int
     {
@@ -112,10 +89,7 @@ private:
         COUNT         = MVEC_UAV + 1
     };
 
-    ComPtr<ID3D12Resource> m_motion_vector_buffer[4]{};
     //    ComPtr<ID3D12Resource> m_depth_buffer[4]{};
-
-    static bool ValidateResource(ID3D12Resource* source, ComPtr<ID3D12Resource> buffers[4]);
 
     bool CreateComputeRootSignature(ID3D12Device* device);
     bool CreatePipelineStates(ID3D12Device* device, DXGI_FORMAT backBufferFormat);

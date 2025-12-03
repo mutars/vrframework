@@ -17,44 +17,6 @@ struct alignas(4) MotionVectorCorrectionConstants {
 };
 static const int CONSTANTS_COUNT = sizeof(MotionVectorCorrectionConstants) / 4;
 
-bool MotionVectorReprojection::ValidateResource(ID3D12Resource* source, ComPtr<ID3D12Resource> buffers[4])
-{
-    if (source == nullptr) {
-        return false;
-    }
-    D3D12_RESOURCE_DESC desc = source->GetDesc();
-    if (buffers[0] != nullptr) {
-        D3D12_RESOURCE_DESC desc2 = buffers[0]->GetDesc();
-        if (desc.Width != desc2.Width || desc.Height != desc2.Height || desc.Format != desc2.Format) {
-            spdlog::info("Resource size mismatch {} {} {} {} {} {} {} {}", fmt::ptr(source), desc.Width, desc.Height, desc.Format, fmt::ptr(buffers[0].Get()), desc2.Width,
-                         desc2.Height, desc2.Format);
-            buffers[0].Reset();
-            buffers[1].Reset();
-            buffers[2].Reset();
-            buffers[3].Reset();
-        }
-    }
-    auto device = g_framework->get_d3d12_hook()->get_device();
-    if (device == nullptr) {
-        return false;
-    }
-    if (buffers[0] == nullptr || buffers[1] == nullptr || buffers[2] == nullptr || buffers[3] == nullptr) {
-        D3D12_HEAP_PROPERTIES heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-        spdlog::info("[VR] Creating resource copy for AFR motion vetor backbuffer. format={}", desc.Format);
-        for (int i = 0; i < 4; i++) {
-            HRESULT hr = device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc,
-                                                         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                                                IID_PPV_ARGS(buffers[i].GetAddressOf()));
-            if (FAILED(hr))
-            {
-                spdlog::error("[VR] Failed to create resource {} HRESULT: 0x{:X}", desc.Format, static_cast<unsigned int>(hr));
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 bool MotionVectorReprojection::CreateComputeRootSignature(ID3D12Device* device)
 {
     CD3DX12_DESCRIPTOR_RANGE1 srvRange;
@@ -135,6 +97,7 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
     const auto& depthDesc      = depth1->GetDesc();
     auto depth_srv_desc = getSRVdesc(depthDesc);
 
+    //TODO try to maintain map for UAV
     device->CreateShaderResourceView(depth1, &depth_srv_desc, m_compute_heap->GetCpuHandle(SRV_UAV::DEPTH_CURRENT));
 
     device->CreateUnorderedAccessView(
@@ -222,18 +185,4 @@ void MotionVectorReprojection::on_d3d12_initialize(ID3D12Device* device, const D
 void MotionVectorReprojection::on_device_reset()
 {
     Reset();
-}
-
-void MotionVectorReprojection::CopyResource(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pSrcResource, ID3D12Resource* pDstResource, D3D12_RESOURCE_STATES srcState,
-                                            D3D12_RESOURCE_STATES dstState)
-{
-    D3D12_RESOURCE_BARRIER barriers[2] = { CD3DX12_RESOURCE_BARRIER::Transition(pSrcResource, srcState, D3D12_RESOURCE_STATE_COPY_SOURCE),
-                                           CD3DX12_RESOURCE_BARRIER::Transition(pDstResource, dstState, D3D12_RESOURCE_STATE_COPY_DEST) };
-    cmdList->ResourceBarrier(2, barriers);
-    cmdList->CopyResource(pDstResource, pSrcResource);
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[0].Transition.StateAfter  = srcState;
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    barriers[1].Transition.StateAfter  = dstState;
-    cmdList->ResourceBarrier(2, barriers);
 }

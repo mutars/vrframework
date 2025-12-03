@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <mods/VR.hpp>
 #include <nvidia/UpscalerAfrNvidiaModule.h>
+#include <amd/UpscalerFsr31Module.h>
 
 #ifdef COMPILE_SHADERS
 namespace shaders::debug {
@@ -115,9 +116,8 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
     if (!m_initialized) {
         return;
     }
-    
-    auto& mvReprojection = UpscalerAfrNvidiaModule::Get()->getMotionVectorReprojection();
-    if (!mvReprojection.isValid()) {
+
+    if (!isValid()) {
         return;
     }
 
@@ -135,27 +135,27 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
         {
             CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
 //            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-//            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+//            CD3DX12_RESOURCE_BARRIER::Transition(m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+//            CD3DX12_RESOURCE_BARRIER::Transition(m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
         };
         commandList->ResourceBarrier(5, barriers);
     }
 
     float clear_color[4]{ 0.0f, 0.0f, 0.0f, 0.0f };
 
-//    const auto& depthDesc      = mvReprojection.m_depth_buffer[0]->GetDesc();
+//    const auto& depthDesc      = m_depth_buffer[0]->GetDesc();
 //    auto depth_srv_desc = getSRVdesc1(depthDesc);
     static auto vr = VR::get();
-    const auto& mvectorDesc = mvReprojection.m_motion_vector_buffer[vr->m_presenter_frame_count % 4]->GetDesc();
+    const auto& mvectorDesc = m_motion_vector_buffer[vr->m_presenter_frame_count % 4]->GetDesc();
     auto mvector_srv_desc = getSRVdesc1(mvectorDesc);
 
     auto modulo_frame = vr->m_presenter_frame_count % 2 == 0 ? 0 : -1;
 
-    device->CreateShaderResourceView(mvReprojection.m_motion_vector_buffer[(vr->m_presenter_frame_count + modulo_frame)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
+    device->CreateShaderResourceView(m_motion_vector_buffer[(vr->m_presenter_frame_count + modulo_frame)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
 //    device->CreateShaderResourceView(mvReprojection->m_depth_buffer[0].Get(), &depth_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::DEPTH));
 //    device->CreateShaderResourceView(mvReprojection->m_motion_vector_buffer[2].Get(), &mvector_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::MVEC_PROCESSED));
 
@@ -202,16 +202,71 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
         {
             CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
 //            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
-            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[2].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_motion_vector_buffer[3].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
 //            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ),
 //            CD3DX12_RESOURCE_BARRIER::Transition(mvReprojection.m_depth_buffer[1].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_GENERIC_READ)
         };
         commandList->ResourceBarrier(5, barriers);
     }
 }
+
+
+bool ShaderDebugOverlay::ValidateResource(ID3D12Resource* source, ComPtr<ID3D12Resource> buffers[4])
+{
+    if (source == nullptr) {
+        return false;
+    }
+    D3D12_RESOURCE_DESC desc = source->GetDesc();
+    if (buffers[0] != nullptr) {
+        D3D12_RESOURCE_DESC desc2 = buffers[0]->GetDesc();
+        if (desc.Width != desc2.Width || desc.Height != desc2.Height || desc.Format != desc2.Format) {
+            spdlog::info("Resource size mismatch {} {} {} {} {} {} {} {}", fmt::ptr(source), desc.Width, desc.Height, desc.Format, fmt::ptr(buffers[0].Get()), desc2.Width,
+                         desc2.Height, desc2.Format);
+            buffers[0].Reset();
+            buffers[1].Reset();
+            buffers[2].Reset();
+            buffers[3].Reset();
+        }
+    }
+    auto device = g_framework->get_d3d12_hook()->get_device();
+    if (device == nullptr) {
+        return false;
+    }
+    if (buffers[0] == nullptr || buffers[1] == nullptr || buffers[2] == nullptr || buffers[3] == nullptr) {
+        D3D12_HEAP_PROPERTIES heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+        spdlog::info("[VR] Creating resource copy for AFR motion vetor backbuffer. format={}", desc.Format);
+        for (int i = 0; i < 4; i++) {
+            HRESULT hr = device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc,
+                                                         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                         IID_PPV_ARGS(buffers[i].GetAddressOf()));
+            if (FAILED(hr))
+            {
+                spdlog::error("[VR] Failed to create resource {} HRESULT: 0x{:X}", desc.Format, static_cast<unsigned int>(hr));
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void ShaderDebugOverlay::CopyResource(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pSrcResource, ID3D12Resource* pDstResource, D3D12_RESOURCE_STATES srcState,
+                                            D3D12_RESOURCE_STATES dstState)
+{
+    D3D12_RESOURCE_BARRIER barriers[2] = { CD3DX12_RESOURCE_BARRIER::Transition(pSrcResource, srcState, D3D12_RESOURCE_STATE_COPY_SOURCE),
+                                           CD3DX12_RESOURCE_BARRIER::Transition(pDstResource, dstState, D3D12_RESOURCE_STATE_COPY_DEST) };
+    cmdList->ResourceBarrier(2, barriers);
+    cmdList->CopyResource(pDstResource, pSrcResource);
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[0].Transition.StateAfter  = srcState;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.StateAfter  = dstState;
+    cmdList->ResourceBarrier(2, barriers);
+}
+
+
 
 bool ShaderDebugOverlay::setup(ID3D12Device* device, D3D12_RESOURCE_DESC& backBufferDesc)
 {

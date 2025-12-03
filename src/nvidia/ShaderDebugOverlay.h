@@ -30,6 +30,18 @@ public:
     void Draw(ID3D12GraphicsCommandList* command_list, ID3D12Resource* resource, const D3D12_CPU_DESCRIPTOR_HANDLE* rtv);
     void on_pre_imgui_frame() override;
 
+    inline bool isValid()
+    {
+        for (const auto& buffer : m_motion_vector_buffer) {
+            if (!buffer)
+                return false;
+        }
+        //        for (const auto& buffer : m_depth_buffer) {
+        //            if (!buffer) return false;
+        //        }
+        return true;
+    }
+
     inline void Reset() {
         m_debug_layer_pso.Reset();
         m_rootSignature.Reset();
@@ -37,6 +49,10 @@ public:
         m_rtv_heap.reset();
         m_commandContext.reset();
         m_image1.Reset();
+        m_motion_vector_buffer[0].Reset();
+        m_motion_vector_buffer[1].Reset();
+        m_motion_vector_buffer[2].Reset();
+        m_motion_vector_buffer[3].Reset();
     }
 
     ShaderDebugOverlay() = default;
@@ -83,6 +99,13 @@ public:
         };
     }
 
+
+    static bool ValidateResource(ID3D12Resource* source, ComPtr<ID3D12Resource> buffers[4]);
+
+
+    static void CopyResource(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pSrcResource, ID3D12Resource* pDstResource, D3D12_RESOURCE_STATES srcState,
+                             D3D12_RESOURCE_STATES dstState);
+
 private:
     enum SRV_HEAP : unsigned int {
         MVEC = 0,
@@ -101,6 +124,10 @@ private:
     std::unique_ptr<DirectX::DescriptorHeap> m_rtv_heap{};
     d3d12::CommandContext m_commandContext{};
     ComPtr<ID3D12Resource> m_image1{ nullptr};
+
+public:
+    ComPtr<ID3D12Resource> m_motion_vector_buffer[4]{};
+private:
     
     UINT m_debug_width{0};
     UINT m_debug_height{0};

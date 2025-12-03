@@ -38,6 +38,7 @@ include("cmake/directxtk.cmake")
 include("cmake/openxr.cmake")
 include("cmake/streamline.cmake")
 include("cmake/imgui.cmake")
+include("cmake/fidelityfx.cmake")
 
 
 # Add headers
@@ -108,6 +109,7 @@ target_include_directories(
     "extern/openvr/headers"
 #    "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui"
     $<BUILD_INTERFACE:${streamline_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${fidelityfx_SOURCE_DIR}/ffx-api/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )

@@ -32,9 +32,6 @@ public:
     void on_device_reset() override;
     void on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc) override;
 
-    // Get MotionVectorReprojection for external access (e.g., debug overlay)
-    MotionVectorReprojection& getMotionVectorReprojection() { return m_motion_vector_reprojection; }
-
     UpscalerAfrNvidiaModule() = default;
     ~UpscalerAfrNvidiaModule() override = default;
 

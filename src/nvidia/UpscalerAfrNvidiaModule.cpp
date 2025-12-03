@@ -1,5 +1,7 @@
 #include "UpscalerAfrNvidiaModule.h"
-#include "sl_matrix_helpers.h"
+#ifdef _DEBUG
+#include <nvidia/ShaderDebugOverlay.h>
+#endif#include "sl_matrix_helpers.h"
 #include <Framework.hpp>
 #include <experimental/DebugUtils.h>
 #include <imgui.h>
@@ -169,8 +171,9 @@ void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame
             m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, frame, command_list);
         }
 #ifdef _DEBUG
-        if(DebugUtils::config.debugShaders && MotionVectorReprojection::ValidateResource(mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer)) {
-            MotionVectorReprojection::CopyResource(command_list, mv_native_resource, m_motion_vector_reprojection.m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
+        static auto shader_debug_overlay = ShaderDebugOverlay::Get();
+        if(DebugUtils::config.debugShaders && ShaderDebugOverlay::ValidateResource(mv_native_resource, shader_debug_overlay->m_motion_vector_buffer)) {
+            ShaderDebugOverlay::CopyResource(command_list, mv_native_resource, shader_debug_overlay->m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
         }
 #endif
     }
