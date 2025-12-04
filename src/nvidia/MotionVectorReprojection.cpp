@@ -1,6 +1,5 @@
 #include "MotionVectorReprojection.h"
 #include <../../../_deps/directxtk12-src/Src/d3dx12.h>
-#include <ModSettings.h>
 #include <aer/ConstantsPool.h>
 #include <d3d12.h>
 #include <mods/VR.hpp>
@@ -9,14 +8,17 @@ namespace shaders::compute {
     #include "motion_vector_correction_cs.h"
 }
 #endif
+namespace
+{
 
-struct alignas(4) MotionVectorCorrectionConstants {
-    glm::mat4 undoCameraMotion{};
-    glm::mat4 cameraMotionCorrection{};
-    XMFLOAT4 texSize{};
-};
-static const int CONSTANTS_COUNT = sizeof(MotionVectorCorrectionConstants) / 4;
-
+    struct alignas(4) MotionVectorCorrectionConstants
+    {
+        glm::mat4 undoCameraMotion{};
+        glm::mat4 cameraMotionCorrection{};
+        XMFLOAT4  texSize{};
+    };
+    static const int CONSTANTS_COUNT = sizeof(MotionVectorCorrectionConstants) / 4;
+}
 bool MotionVectorReprojection::CreateComputeRootSignature(ID3D12Device* device)
 {
     CD3DX12_DESCRIPTOR_RANGE1 srvRange;
@@ -80,9 +82,10 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
     }
 
     // Transition resources to compute shader read/write states
-    D3D12_RESOURCE_BARRIER barriers[2] = {
+    D3D12_RESOURCE_BARRIER barriers[3] = {
         CD3DX12_RESOURCE_BARRIER::Transition(depth1, depth_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-        CD3DX12_RESOURCE_BARRIER::Transition(motionVector, mv_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+        CD3DX12_RESOURCE_BARRIER::Transition(motionVector, mv_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+        CD3DX12_RESOURCE_BARRIER::UAV(motionVector)
     };
     cmd_list->ResourceBarrier(2, barriers);
 
@@ -134,7 +137,7 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
     barriers[0].Transition.StateAfter = depth_state;
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     barriers[1].Transition.StateAfter = mv_state;
-    cmd_list->ResourceBarrier(2, barriers);
+    cmd_list->ResourceBarrier(3, barriers);
 }
 
 

@@ -32,7 +32,7 @@ public:
         return instance;
     }
 
-    std::string_view get_name() const override { return "AMD FSR 3.1 Upscaler AFR"; }
+    std::string_view get_name() const override { return "FSR31_AER"; }
     
     std::optional<std::string> on_initialize() override;
     void on_draw_ui() override;
@@ -40,8 +40,6 @@ public:
     void on_config_save(utility::Config& cfg) override;
     void on_device_reset() override;
     void on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc) override;
-
-    MotionVectorReprojection& getMotionVectorReprojection() { return m_motion_vector_reprojection; }
 
     UpscalerFsr31Module() = default;
     ~UpscalerFsr31Module() override;

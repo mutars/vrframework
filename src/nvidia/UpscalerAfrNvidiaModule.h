@@ -23,7 +23,7 @@ public:
     }
 
     // Mod interface implementation
-    std::string_view get_name() const override { return "NVIDIA Upscaler AFR"; }
+    std::string_view get_name() const override { return "DLSS_AER"; }
     
     std::optional<std::string> on_initialize() override;
     void on_draw_ui() override;
