@@ -2,9 +2,11 @@
 #include <filesystem>
 #include <fstream>
 
+#include <ModSettings.h>
+#include <aer/ConstantsPool.h>
+#include <experimental/DebugUtils.h>
 #include <imgui.h>
 #include <json.hpp>
-#include <ModSettings.h>
 #include <utility/String.hpp>
 
 #include "Framework.hpp"
@@ -14,7 +16,7 @@
 using namespace nlohmann;
 
 namespace runtimes {
-VRRuntime::Error OpenXR::synchronize_frame() {
+VRRuntime::Error OpenXR::synchronize_frame(int frame) {
     SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
 
@@ -23,6 +25,8 @@ VRRuntime::Error OpenXR::synchronize_frame() {
         return VRRuntime::Error::UNSPECIFIED;
     }
 
+    m_last_synchronized_frame = frame;
+
     if (this->frame_synced) {
         return VRRuntime::Error::SUCCESS;
     }
@@ -30,9 +34,8 @@ VRRuntime::Error OpenXR::synchronize_frame() {
     this->begin_profile();
 
     XrFrameWaitInfo frame_wait_info{XR_TYPE_FRAME_WAIT_INFO};
-    int             modulino                    = internal_frame_counter % QUEUE_SIZE;
-    this->pipeline_states[modulino].frame_state = {XR_TYPE_FRAME_STATE};
-    auto result = xrWaitFrame(this->session, &frame_wait_info, &this->pipeline_states[modulino].frame_state);
+    this->pipeline_state.frame_state = {XR_TYPE_FRAME_STATE};
+    auto result = xrWaitFrame(this->session, &frame_wait_info, &this->pipeline_state.frame_state);
 
     this->end_profile("xrWaitFrame");
 
@@ -47,7 +50,7 @@ VRRuntime::Error OpenXR::synchronize_frame() {
     return VRRuntime::Error::SUCCESS;
 }
 
-VRRuntime::Error OpenXR::update_poses() {
+VRRuntime::Error OpenXR::update_poses(int frame) {
     SCOPE_PROFILER();
     std::scoped_lock _{ this->sync_mtx };
     std::unique_lock __{ this->pose_mtx };
@@ -65,7 +68,7 @@ VRRuntime::Error OpenXR::update_poses() {
 
     uint32_t view_count{};
 
-    auto& current_pipeline_state = this->pipeline_states[this->internal_frame_counter % QUEUE_SIZE];
+    auto& current_pipeline_state = this->pipeline_state;
 
     // Only signal that we got the first valid pose if the display time becomes a sane value
     if (!this->got_first_valid_poses) {
@@ -87,7 +90,8 @@ VRRuntime::Error OpenXR::update_poses() {
         return VRRuntime::Error::SUCCESS;
     }
 
-    const auto display_time = current_pipeline_state.frame_state.predictedDisplayTime + (XrDuration)(current_pipeline_state.frame_state.predictedDisplayPeriod * this->prediction_scale);
+    auto ps = frame > m_last_synchronized_frame ? this->prediction_scale : 0.0;
+    const auto display_time = current_pipeline_state.frame_state.predictedDisplayTime + (XrDuration)(current_pipeline_state.frame_state.predictedDisplayPeriod * ps);
 
     XrViewLocateInfo view_locate_info{XR_TYPE_VIEW_LOCATE_INFO};
     view_locate_info.viewConfigurationType = this->view_config;
@@ -165,16 +169,16 @@ uint32_t OpenXR::get_width() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale);
-//    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale * eye_width_adjustment);
+//    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale);
+    return (uint32_t)((float)this->view_configs[0].recommendedImageRectWidth * this->resolution_scale * eye_width_adjustment);
 }
 
 uint32_t OpenXR::get_height() const {
     if (this->view_configs.empty()) {
         return 0;
     }
-//    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale * eye_height_adjustment);
-    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale);
+    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale * eye_height_adjustment);
+//    return (uint32_t)((float)this->view_configs[0].recommendedImageRectHeight * this->resolution_scale);
 }
 
 VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
@@ -212,7 +216,7 @@ VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
                     spdlog::error("VR: xrBeginSession failed: {}", this->get_result_string(result));
                 } else {
                     this->session_ready = true;
-                    synchronize_frame();
+                    synchronize_frame(m_last_synchronized_frame);
                 }
             } else if (ev->state == XR_SESSION_STATE_LOSS_PENDING) {
                 spdlog::info("VR: XR_SESSION_STATE_LOSS_PENDING");
@@ -249,7 +253,7 @@ VRRuntime::Error OpenXR::consume_events(std::function<void(void*)> callback) {
 
 VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     SCOPE_PROFILER();
-    auto& current_pipeline_state = this->pipeline_states[this->internal_frame_counter % QUEUE_SIZE];
+    auto& current_pipeline_state = this->pipeline_state;
     if (!this->session_ready || current_pipeline_state.views.empty()) {
         return VRRuntime::Error::SUCCESS;
     }
@@ -257,36 +261,56 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
     std::unique_lock __{ this->eyes_mtx };
     std::unique_lock ___{ this->pose_mtx };
 
-    auto get_mat = [&](int eye) {
-        std::array<float, 4> tan_half_fov{};
-
-        if (HORIZONTAL_SYMMETRIC) {
-            tan_half_fov[0] = -std::max(std::max(-this->raw_projections[0][0], this->raw_projections[0][1]),
-                                        std::max(-this->raw_projections[1][0], this->raw_projections[1][1]));
-            tan_half_fov[1] = -tan_half_fov[0];
+    auto calc_fov = [&](PipelineState& pipelineState) {
+        const auto& fov_l = pipelineState.views[0].fov;
+        const auto& fov_r = pipelineState.views[1].fov;
+        auto& active_fov_l = pipelineState.active_fov[0];
+        auto& active_fov_r = pipelineState.active_fov[1];
+        if(HORIZONTAL_SYMMETRIC) {
+            active_fov_l.angleLeft = -std::max(std::max(-fov_l.angleLeft, fov_l.angleRight), std::max(-fov_r.angleLeft, fov_r.angleRight));
+            active_fov_l.angleRight = -active_fov_l.angleLeft;
+            active_fov_r.angleLeft = active_fov_l.angleLeft;
+            active_fov_r.angleRight = active_fov_l.angleRight;
         } else if (HORIZONTAL_MIRROR) {
-            float max_outer = std::max(-this->raw_projections[0][0], this->raw_projections[1][1]);
-            float max_inner = std::max(this->raw_projections[0][1], -this->raw_projections[1][0]);
-            tan_half_fov[0] = eye == 0 ? -max_outer : -max_inner;
-            tan_half_fov[1] = eye == 0 ? max_inner : max_outer;
+            float max_outer = std::max(-fov_l.angleLeft, fov_r.angleRight);
+            float max_inner = std::max(fov_l.angleRight, -fov_r.angleLeft);
+            active_fov_l.angleLeft = -max_outer;
+            active_fov_l.angleRight = max_inner;
+            active_fov_r.angleLeft = -max_inner;
+            active_fov_r.angleRight = max_outer;
         } else {
-            tan_half_fov[0] = this->raw_projections[eye][0];
-            tan_half_fov[1] = this->raw_projections[eye][1];
+            active_fov_l.angleLeft = fov_l.angleLeft;
+            active_fov_l.angleRight = fov_l.angleRight;
+            active_fov_r.angleLeft = fov_r.angleLeft;
+            active_fov_r.angleRight = fov_r.angleRight;
         }
 
-        if (VERTICAL_SYMMETRIC) {
-            tan_half_fov[2] = std::max(std::max(this->raw_projections[0][2], -this->raw_projections[0][3]),
-                                       std::max(this->raw_projections[1][2], -this->raw_projections[1][3]));
-            tan_half_fov[3] = -tan_half_fov[2];
+        if(VERTICAL_SYMMETRIC) {
+            active_fov_l.angleUp = std::max(std::max(fov_l.angleUp, -fov_l.angleDown), std::max(fov_r.angleUp, -fov_r.angleDown));
+            active_fov_l.angleDown = -active_fov_l.angleUp;
+            active_fov_r.angleUp = active_fov_l.angleUp;
+            active_fov_r.angleDown = active_fov_l.angleDown;
         } else if (VERTICAL_MATCHED) {
-            float max_top = std::max(this->raw_projections[0][2], this->raw_projections[1][2]);
-            float max_bottom = std::max(-this->raw_projections[0][3], -this->raw_projections[1][3]);
-            tan_half_fov[2] = max_top;
-            tan_half_fov[3] = -max_bottom;
+            float max_top = std::max(fov_l.angleUp, fov_r.angleUp);
+            float max_bottom = std::max(-fov_l.angleDown, -fov_r.angleDown);
+            active_fov_l.angleUp = max_top;
+            active_fov_l.angleDown = -max_bottom;
+            active_fov_r.angleUp = max_top;
+            active_fov_r.angleDown = -max_bottom;
         } else {
-            tan_half_fov[2] = this->raw_projections[eye][2];
-            tan_half_fov[3] = this->raw_projections[eye][3];
+            active_fov_l.angleUp = fov_l.angleUp;
+            active_fov_l.angleDown = fov_l.angleDown;
+            active_fov_r.angleUp = fov_r.angleUp;
+            active_fov_r.angleDown = fov_r.angleDown;
         }
+    };
+
+    auto get_mat = [&](int eye, PipelineState& pipelineState) {
+        std::array<float, 4> tan_half_fov{};
+        tan_half_fov[0] = tan(pipelineState.active_fov[eye].angleLeft);
+        tan_half_fov[1] = tan(pipelineState.active_fov[eye].angleRight);
+        tan_half_fov[2] = tan(pipelineState.active_fov[eye].angleUp);
+        tan_half_fov[3] = tan(pipelineState.active_fov[eye].angleDown);
         view_bounds[eye][0] = 0.5f - 0.5f * this->raw_projections[eye][0] / tan_half_fov[0];
         view_bounds[eye][1] = 0.5f + 0.5f * this->raw_projections[eye][1] / tan_half_fov[1];
         view_bounds[eye][2] = 0.5f - 0.5f * this->raw_projections[eye][2] / tan_half_fov[2];
@@ -301,7 +325,6 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
                 eye_width_adjustment = 1;
                 eye_height_adjustment = 1;
             }
-//            SPDLOG_INFO("Eye texture proportion scale: {} by {}", eye_width_adjustment, eye_height_adjustment);
         }
 
         const auto left =   tan_half_fov[0];
@@ -318,31 +341,13 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         this->raw_projections[i][1] = tan(fov.angleRight);
         this->raw_projections[i][2] = tan(fov.angleUp);
         this->raw_projections[i][3] = tan(fov.angleDown);
-
-        frustums[i] = get_mat(i);
-        // Update projection matrix
-//        float sum_rl= (frustums[i][1] + frustums[i][0]);
-//        float sum_tb = (frustums[i][2] + frustums[i][3]);
-//        float inv_rl = (1.0f / (frustums[i][1] - frustums[i][0]));
-//        float inv_tb = (1.0f / (frustums[i][2] - frustums[i][3]));
-//        this->projections[i] = Matrix4x4f {
-//            2.0f*inv_rl,   0.0f,          0.0f,                              0.0f,
-//            0.0f,          2.0f*inv_tb,   0.0f,                              0.0f,
-//            sum_rl*inv_rl, sum_tb*inv_tb, nearz/(farz-nearz),               -1.0f,
-//            0.0f,          0.0f,          (nearz*farz)/(nearz-farz),         0.0f
-//        };
-
-//
-//        auto proj = glm::mat4(
-//            glm::vec4 {(1.0f/ *outTanHalfFovX * ModSettings::g_debugAndCalibration.fovScale), 0.0f, 0.0f, 0.0f},
-//            {0.0f, (1.0f/ *outTanHalfFovY * ModSettings::g_debugAndCalibration.fovScale), 0.0f, 0.0f},
-//            {0.0f, 0.0f, (nearZ / (farZ-nearZ)), -1.0f},
-//            {0.0f, 0.0f, ((nearZ * farZ) / (nearZ - farZ)), 0.0f}
-//        );
-        // Update view matrix
         this->eyes[i] = Matrix4x4f{*(glm::quat*)&pose.orientation};
         this->eyes[i][3] = Vector4f{*(Vector3f*)&pose.position, 1.0f};
     }
+    calc_fov(current_pipeline_state);
+    frustums[0] = get_mat(0, current_pipeline_state);
+    frustums[1] = get_mat(1, current_pipeline_state);
+
     this->ipd = glm::distance(this->eyes[0][3], this->eyes[1][3]);
     this->diagonal_fov = glm::degrees(2.0f * std::atan(std::sqrt(frustums[0][0]*frustums[0][0] + frustums[0][2]*frustums[0][2])));
 
@@ -444,7 +449,7 @@ void OpenXR::destroy() {
     this->system = XR_NULL_SYSTEM_ID;
     this->frame_synced = false;
     this->frame_began = false;
-    this->internal_frame_counter = 0;
+//    this->internal_frame_counter = 0;
 }
 
 std::string OpenXR::get_result_string(XrResult result) const {
@@ -1341,7 +1346,7 @@ void OpenXR::save_bindings() {
     this->wants_reinitialize = true;
 }
 
-XrResult OpenXR::begin_frame() {
+XrResult OpenXR::begin_frame(int frame) {
     SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
 
@@ -1367,7 +1372,7 @@ XrResult OpenXR::begin_frame() {
     }
 
     if (result == XR_ERROR_CALL_ORDER_INVALID) {
-        synchronize_frame();
+        synchronize_frame(frame);
         result = xrBeginFrame(this->session, &frame_begin_info);
     }
 
@@ -1376,7 +1381,7 @@ XrResult OpenXR::begin_frame() {
     return result;
 }
 
-XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, bool has_depth) {
+XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth) {
 
     SCOPE_PROFILER();
     std::scoped_lock _{sync_mtx};
@@ -1397,24 +1402,21 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
 
     // we CANT push the layers every time, it cause some layer error
     // in xrEndFrame, so we must only do it when shouldRender is true
-    int current_frame = internal_frame_counter % QUEUE_SIZE;
-    int prev_frame = internal_frame_counter > 0 ? ((internal_frame_counter - 1) % QUEUE_SIZE): current_frame;
-    auto current_pipeline = &this->pipeline_states[current_frame];
-    auto prev_pipeline = &this->pipeline_states[prev_frame];
-#ifndef MOD_OPENXR_ONE_FRAME_OFF
-    auto reference_pipeline = current_pipeline;
-#else
-    auto reference_pipeline = prev_pipeline;
-#endif
+    auto current_pipeline = &this->pipeline_state;
+
+    auto l_frame = frame % 2 == 0 ? frame : frame - 1;
+    auto r_frame = frame % 2 == 0 ? frame - 1 : frame;
+
     if (current_pipeline->frame_state.shouldRender == XR_TRUE) {
         projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         if (!ModSettings::g_internalSettings.showQuadDisplay) {
             for (auto i = 0; i < projection_layer_views.size(); ++i) {
                 const auto& swapchain = this->swapchains[i];
-    
+                int         actual_frame = i == 0 ? l_frame : r_frame;
+                auto& constants = GlobalPool::get_xr_constants(actual_frame);
+
                 projection_layer_views[i].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-                projection_layer_views[i].pose = reference_pipeline->stage_views[i].pose;
-                projection_layer_views[i].fov = reference_pipeline->stage_views[i].fov;
+                projection_layer_views[i].pose = constants.pose;
                 projection_layer_views[i].subImage.swapchain = swapchain.handle;
                 int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
                 int texture_area_width = swapchain.width;
@@ -1424,11 +1426,16 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
     
                 offset_y = (int32_t)(view_bounds[i][2] * (float)swapchain.height);
                 extent_y = (int32_t)(view_bounds[i][3] * (float)swapchain.height) - offset_y;
-    
-                projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
-                projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
-    //            projection_layer_views[i].subImage.imageRect.offset = {0, 0};
-    //            projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};
+                if(!DebugUtils::config.alternativeSymmetricProjection) {
+                    projection_layer_views[i].fov = current_pipeline->stage_views[i].fov;
+                    projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
+                    projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
+                } else {
+                    projection_layer_views[i].subImage.imageRect.offset = {0, 0};
+                    projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};
+                    projection_layer_views[i].fov = current_pipeline->active_fov[i];
+                }
+
             }
             XrCompositionLayerProjection layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
             layer.space = this->stage_space;
@@ -1455,7 +1462,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 
                 // Set pose relative to view
                 l_quad_layers[i].pose.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
-                l_quad_layers[i].pose.position = reference_pipeline->stage_views[i].pose.position;
+                l_quad_layers[i].pose.position = current_pipeline->stage_views[i].pose.position;
                 // Move 2m forward from eye position
                 l_quad_layers[i].pose.position.z -= ModSettings::g_internalSettings.quadDisplayDistance;
                 
@@ -1487,7 +1494,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
         spdlog::error("[VR] xrEndFrame failed: {}", this->get_result_string(result));
     }
 
-    internal_frame_counter++;
+//    internal_frame_counter++;
     this->frame_began = false;
     this->frame_synced = false;
 

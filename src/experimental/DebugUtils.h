@@ -9,6 +9,7 @@ namespace DebugUtils
         bool      cameraShake{ false };
         bool      cameraSpin{ false };
         bool      cameraMotion{ true };
+        bool      alternativeSymmetricProjection{ false };
     };
     extern DebugConfig config;
     glm::mat4 generateOffsetMatrix();

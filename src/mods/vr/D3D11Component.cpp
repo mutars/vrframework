@@ -351,10 +351,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             }
 
             if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
-                runtime->synchronize_frame();
+                runtime->synchronize_frame(vr->m_presenter_frame_count);
 
                 if (!runtime->got_first_poses) {
-                    runtime->update_poses();
+                    runtime->update_poses(vr->m_presenter_frame_count + 1);
                 }
             }
         }
@@ -362,7 +362,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
             if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
                 LOG_VERBOSE("Beginning frame.");
-                vr->m_openxr->begin_frame();
+                vr->m_openxr->begin_frame(vr->m_presenter_frame_count);
             }
 
             LOG_VERBOSE("Ending frame");
@@ -378,7 +378,7 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 }
             }
 
-            auto result = vr->m_openxr->end_frame(quad_layers, scene_depth_tex != nullptr);
+            auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count, scene_depth_tex != nullptr);
 
             vr->m_openxr->needs_pose_update = true;
             vr->m_submitted = result == XR_SUCCESS;

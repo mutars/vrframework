@@ -63,30 +63,33 @@ struct OpenXR final : public VRRuntime {
 
 
     inline int get_view_count() const {
-        return this->pipeline_states[internal_frame_counter % QUEUE_SIZE].views.size();
+        return this->pipeline_state.views.size();
     }
 
     inline int get_stage_views_count() const {
-        return this->pipeline_states[internal_frame_counter % QUEUE_SIZE].stage_views.size();
+        return this->pipeline_state.stage_views.size();
     }
 
     inline bool should_render() const {
-        return this->pipeline_states[internal_frame_counter % QUEUE_SIZE].frame_state.shouldRender == XR_TRUE;
+        return this->pipeline_state.frame_state.shouldRender == XR_TRUE;
     }
 
     inline auto& get_view_space_location() const {
-        return this->pipeline_states[internal_frame_counter % QUEUE_SIZE].view_space_location;
+        return this->pipeline_state.view_space_location;
+    }
+
+    inline auto& get_pipeline_state() {
+        return this->pipeline_state;
     }
 
     inline void init_pipline_state(int views_size) {
-        for(auto& state : this->pipeline_states) {
-            state.views.resize(views_size, {XR_TYPE_VIEW});
-            state.stage_views.resize(views_size, {XR_TYPE_VIEW});
-        }
+        this->pipeline_state.views.resize(views_size, {XR_TYPE_VIEW});
+        this->pipeline_state.stage_views.resize(views_size, {XR_TYPE_VIEW});
+        this->pipeline_state.active_fov.resize(views_size, {});
     }
 
-    VRRuntime::Error synchronize_frame() override;
-    VRRuntime::Error update_poses() override;
+    VRRuntime::Error synchronize_frame(int frame) override;
+    VRRuntime::Error update_poses(int frame) override;
     VRRuntime::Error update_render_target_size() override;
     uint32_t get_width() const override;
     uint32_t get_height() const override;
@@ -131,8 +134,8 @@ public:
         return XrVector3f{ v.x, v.y, v.z };
     }
 
-    XrResult begin_frame();
-    XrResult end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, bool has_depth = false);
+    XrResult begin_frame(int frame);
+    XrResult end_frame(const std::vector<XrCompositionLayerBaseHeader*>& quad_layers, int frame, bool has_depth = false);
 
     void begin_profile() {
         if (!this->profile_calls) {
@@ -168,14 +171,12 @@ public:
 
 public: 
     // OpenXR specific fields
-#ifndef MOD_OPENXR_ONE_FRAME_OFF
-    double prediction_scale{0.0};
-#else
+//TODO make it definition
     double prediction_scale{1.0};
-#endif
     bool session_ready{false};
     bool frame_began{false};
     bool frame_synced{false};
+    bool async_aer{true};
 #ifdef DEBUG_PROFILING_ENABLED
     bool profile_calls{true};
 #else
@@ -216,12 +217,10 @@ public:
         XrSpaceLocation view_space_location{XR_TYPE_SPACE_LOCATION};
         std::vector<XrView> views{};
         std::vector<XrView> stage_views{};
-    };
-    static constexpr auto QUEUE_SIZE = 6;
-    std::array<PipelineState, QUEUE_SIZE> pipeline_states{};
+        std::vector<XrFovf>  active_fov{};
+    } pipeline_state{};
 
-    int internal_frame_counter{0};
-
+    int m_last_synchronized_frame{0};
     float resolution_scale{1.0f};
 
 

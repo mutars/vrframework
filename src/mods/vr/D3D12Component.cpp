@@ -77,19 +77,18 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     if (is_left_eye_frame) {
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if(m_crop_copy) {
-                D3D12_BOX src_box{};
-                src_box.left = 0;
-                src_box.right = m_backbuffer_size[0];
-                src_box.top = 0;
-                src_box.bottom = m_backbuffer_size[1];
-                src_box.front = 0;
-                src_box.back = 1;
-                m_openxr.copy(0, eye_texture.Get(), D3D12_RESOURCE_STATE_PRESENT, &src_box);
-            } else {
-                m_openxr.copy(0, eye_texture.Get());
-            }
-
+#ifdef OPENXR_FRAME_CROP_COPY
+            D3D12_BOX src_box{};
+            src_box.left = 0;
+            src_box.right = m_backbuffer_size[0];
+            src_box.top = 0;
+            src_box.bottom = m_backbuffer_size[1];
+            src_box.front = 0;
+            src_box.back = 1;
+            m_openxr.copy(0, eye_texture.Get(), D3D12_RESOURCE_STATE_PRESENT, &src_box);
+#else
+            m_openxr.copy(0, eye_texture.Get());
+#endif
         }
 
         // OpenVR texture
@@ -117,7 +116,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
     } else {
         // OpenXR texture
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if(m_crop_copy) {
+#ifdef OPENXR_FRAME_CROP_COPY
                 D3D12_BOX src_box{};
                 src_box.left = 0;
                 src_box.right = m_backbuffer_size[0];
@@ -126,9 +125,9 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 src_box.front = 0;
                 src_box.back = 1;
                 m_openxr.copy(1, eye_texture.Get(), D3D12_RESOURCE_STATE_PRESENT, &src_box);
-            } else {
+#else
                 m_openxr.copy(1, eye_texture.Get());
-            }
+#endif
         }
 
         // OpenVR texture
@@ -160,21 +159,21 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
 
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
-    if (is_right_eye_frame) {
+    if (is_right_eye_frame || vr->is_using_async_aer()) {
         ////////////////////////////////////////////////////////////////////////////////
         // OpenXR start ////////////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////
         if (runtime->ready() && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE) {
-            runtime->synchronize_frame();
+            runtime->synchronize_frame(vr->m_presenter_frame_count);
 
             if (!runtime->got_first_poses) {
-                runtime->update_poses();
+                runtime->update_poses(vr->m_presenter_frame_count + 1);
             }
         }
 
         if (runtime->is_openxr() && vr->m_openxr->ready()) {
             if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
-                vr->m_openxr->begin_frame();
+                vr->m_openxr->begin_frame(vr->m_presenter_frame_count);
             }
 
             std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
@@ -188,7 +187,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 }
             }
 
-            auto result = vr->m_openxr->end_frame(quad_layers);
+            auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count);
 
             if (result == XR_ERROR_LAYER_INVALID) {
                 spdlog::info("[VR] Attempting to correct invalid layer");
@@ -196,7 +195,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 m_openxr.wait_for_all_copies();
 
                 spdlog::info("[VR] Calling xrEndFrame again");
-                result = vr->m_openxr->end_frame(quad_layers);
+                result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count);
             }
 
             vr->m_openxr->needs_pose_update = true;
@@ -217,7 +216,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         }
 
         // Allows the desktop window to be recorded.
-        if (vr->m_desktop_fix->value()) {
+        if (vr->m_desktop_fix->value() && is_right_eye_frame) {
             if (runtime->ready() && m_prev_backbuffer != backbuffer && m_prev_backbuffer != nullptr) {
                 auto& copier = m_generic_copiers[vr->m_presenter_frame_count % m_generic_copiers.size()];
                 copier.wait(INFINITE);

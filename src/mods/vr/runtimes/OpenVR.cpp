@@ -3,7 +3,7 @@
 #include "OpenVR.hpp"
 
 namespace runtimes {
-VRRuntime::Error OpenVR::synchronize_frame() {
+VRRuntime::Error OpenVR::synchronize_frame(int frame) {
     if (this->got_first_poses && !this->is_hmd_active) {
         return VRRuntime::Error::SUCCESS;
     }
@@ -19,7 +19,7 @@ VRRuntime::Error OpenVR::synchronize_frame() {
     return (VRRuntime::Error)ret;
 }
 
-VRRuntime::Error OpenVR::update_poses() {
+VRRuntime::Error OpenVR::update_poses(int frame) {
     if (!this->ready()) {
         return VRRuntime::Error::SUCCESS;
     }
@@ -138,8 +138,8 @@ VRRuntime::Error OpenVR::update_matrices(float nearz, float farz){
 //            SPDLOG_INFO("Eye texture proportion scale: {} by {}", eye_width_adjustment, eye_height_adjustment);
         }
 
-        const auto left =   tan_half_fov[0];
-        const auto right =  tan_half_fov[1];
+        const auto left =   -tan_half_fov[0];
+        const auto right =  -tan_half_fov[1];
         const auto top =    tan_half_fov[2];
         const auto bottom = tan_half_fov[3];
 

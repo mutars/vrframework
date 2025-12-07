@@ -3,6 +3,7 @@
 #include "math/Math.hpp"
 #include <ModSettings.h>
 #include <Xinput.h>
+#include <aer/ConstantsPool.h>
 #include <fstream>
 #include <imgui.h>
 #include <utility/ScopeGuard.hpp>
@@ -603,10 +604,10 @@ bool VR::is_any_action_down() {
     return false;
 }
 
-void VR::update_hmd_state() {
+void VR::update_hmd_state(int frame) {
     auto runtime = get_runtime();
 
-    runtime->update_poses();
+    runtime->update_poses(frame);
 
     // Update the poses used for the game
     // If we used the data directly from the WaitGetPoses call, we would have to lock a different mutex and wait a long time
@@ -617,6 +618,12 @@ void VR::update_hmd_state() {
     }
 
     runtime->update_matrices(m_nearz, m_farz);
+    if(runtime->is_openxr()) {
+        auto& pipeline_state = m_openxr->get_pipeline_state();
+        GlobalPool::submit_openxr_pose(pipeline_state.stage_views[frame % 2].pose, frame);
+        GlobalPool::submit_openxr_fov(pipeline_state.active_fov[frame % 2], frame);
+    }
+
     runtime->got_first_poses = true;
 }
 
@@ -818,13 +825,13 @@ void VR::on_present() {
     SCOPE_PROFILER();
 //    m_presenter_frame_count = m_render_frame_count;
     utility::ScopeGuard _guard {[&]() {
-        if (!is_using_afr() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
+        if (is_using_async_aer() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
             SetEvent(m_present_finished_event);
         }
 
     }};
 
-    if (!is_using_afr() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
+    if (is_using_async_aer() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
         ResetEvent(m_present_finished_event);
     }
 
@@ -882,18 +889,18 @@ void VR::on_present() {
     if (m_presenter_frame_count % 2 == m_left_eye_interval && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
         //TODO LATE does not work
         const auto had_sync = runtime->got_first_sync;
-        runtime->synchronize_frame();
+        runtime->synchronize_frame(m_presenter_frame_count + 1);
 
         if (!runtime->got_first_poses || !had_sync) {
-            update_hmd_state();
+            update_hmd_state(m_presenter_frame_count + 1);
         }
     }
 
     if (renderer == Framework::RendererType::D3D11) {
         // if we don't do this then D3D11 OpenXR freezes for some reason.
         if (!runtime->got_first_sync) {
-            runtime->synchronize_frame();
-            runtime->update_poses();
+            runtime->synchronize_frame(m_presenter_frame_count + 1);
+            runtime->update_poses(m_presenter_frame_count + 1);
         }
 
         m_is_d3d12 = false;
@@ -947,16 +954,16 @@ void VR::on_post_present() {
     if (m_presenter_frame_count % 2 == m_left_eye_interval) {
         if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
             const auto had_sync = runtime->got_first_sync;
-            runtime->synchronize_frame();
+            runtime->synchronize_frame(m_presenter_frame_count);
 
             if (!runtime->got_first_poses || !had_sync) {
-                update_hmd_state();
+                update_hmd_state(m_presenter_frame_count + 1);
             }
         }
 
         if (runtime->is_openxr() && runtime->ready() && runtime->get_synchronize_stage() > VRRuntime::SynchronizeStage::EARLY) {
             if (!m_openxr->frame_began) {
-                m_openxr->begin_frame();
+                m_openxr->begin_frame(m_presenter_frame_count);
             }
         }
     }
@@ -976,16 +983,7 @@ void VR::on_post_present() {
 
 //thread_local bool timed_out = false;
 
-void VR::on_engine_tick(void* entry) {
-    SCOPE_PROFILER();
-    auto runtime = get_runtime();
-
-    if (!runtime->loaded) {
-        return;
-    }
-}
-
-void VR::on_begin_rendering(void* entry) {
+void VR::on_begin_rendering(int frame) {
     SCOPE_PROFILER();
     auto runtime = get_runtime();
 
@@ -995,19 +993,21 @@ void VR::on_begin_rendering(void* entry) {
     m_in_render = true;
 //    m_render_frame_count = m_engine_frame_count;
 //    on_wait_rendering(entry);
-    if ((m_render_frame_count)% 2 == m_left_eye_interval) {
-        if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
-            if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
-                if (!runtime->got_first_sync || runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
+    if ((frame)% 2 == m_left_eye_interval || is_using_async_aer()) {
+        if(runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
+            if (runtime->is_openxr()) {
+                if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
+                    if (!runtime->got_first_sync || runtime->synchronize_frame(frame) != VRRuntime::Error::SUCCESS) {
+                        return;
+                    }
+                } else if (runtime->synchronize_frame(frame) != VRRuntime::Error::SUCCESS) {
                     return;
                 }
-            } else if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                return;
-            }
-            m_openxr->begin_frame();
-        } else {
-            if (runtime->synchronize_frame() != VRRuntime::Error::SUCCESS) {
-                return;
+                m_openxr->begin_frame(frame);
+            } else {
+                if (runtime->synchronize_frame(frame) != VRRuntime::Error::SUCCESS) {
+                    return;
+                }
             }
         }
     }
@@ -1376,6 +1376,7 @@ void VR::on_draw_ui() {
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             m_openxr->resolution_scale = m_resolution_scale->value();
         }
+        m_use_async_aer->draw("Use Async AER");
     }
 
 //    ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");

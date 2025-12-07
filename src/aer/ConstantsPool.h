@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/ext/matrix_float4x4.hpp>
+#include <openxr/openxr.h>
 
 namespace GlobalPool
 {
@@ -9,6 +10,11 @@ namespace GlobalPool
     {
         glm::mat4     projection{ 1.0 };
         glm::mat4     finalView{ 1.0f };
+//        glm::mat4     cameraView{1.0f};
+        struct OpenXR {
+            XrPosef pose{};
+            XrFovf  fov{};
+        } openxr;
     };
 
     extern Constants g_constants[CONSTANTS_HISTORY_SIZE];
@@ -24,6 +30,16 @@ namespace GlobalPool
     {
         g_constants[frame % CONSTANTS_HISTORY_SIZE].finalView = finalView;
     }
+//
+//    inline void submit_camera_view(glm::mat4& cameraView, int frame)
+//    {
+//        g_constants[frame % CONSTANTS_HISTORY_SIZE].cameraView = cameraView;
+//    }
+//
+//    inline const auto& get_camera_view(int frame)
+//    {
+//        return g_constants[frame % CONSTANTS_HISTORY_SIZE].cameraView;
+//    }
 
     inline auto& get_projection(int frame)
     {
@@ -35,4 +51,25 @@ namespace GlobalPool
         return g_constants[frame % CONSTANTS_HISTORY_SIZE].finalView;
     }
 
+    inline void submit_openxr_pose(XrPosef& pose, int frame) {
+        g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr.pose = pose;
+    }
+
+    inline const auto& get_openxr_pose(int frame) {
+        return g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr.pose;
+    }
+
+    inline void submit_openxr_fov(XrFovf& fov, int frame) {
+        g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr.fov = fov;
+    }
+
+    inline const auto& get_openxr_fov(int frame) {
+        return g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr.fov;
+    }
+
+    inline const auto& get_xr_constants(int frame) {
+        return g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr;
+    }
+
+//    XrPosef calculate_xr_pose_compensation(int reference_frame, int current_frame);
 }; // namespace GlobalPool

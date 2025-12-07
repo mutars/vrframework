@@ -87,8 +87,7 @@ public:
     void on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) override;
     void on_xinput_get_capabilities(uint32_t* retval, uint32_t user_index, uint32_t flags, XINPUT_CAPABILITIES* capabilities) override;
     void on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) override;
-    void on_engine_tick(void* entry);
-    void on_begin_rendering(void* entry);
+    void on_begin_rendering(int frame);
 //    void on_pre_end_rendering(void* entry);
     void on_end_rendering(void* entry);
 //    void on_pre_wait_rendering(void* entry);
@@ -136,8 +135,8 @@ public:
 //    int32_t get_frame_count() const;
 //    int32_t get_game_frame_count() const;
 
-    bool is_using_afr() const {
-        return m_use_afr->value();
+    bool is_using_async_aer() const {
+        return m_runtime->is_openxr() && m_use_async_aer->value();
     }
 
     bool is_gui_enabled() const {
@@ -391,7 +390,7 @@ private:
     bool detect_controllers();
     bool is_any_action_down();
 public:
-    void update_hmd_state();
+    void update_hmd_state(int frame);
 private:
     void update_camera(); // if not in firstperson mode
     void update_camera_origin(); // every frame
@@ -605,7 +604,7 @@ private:
 
     const ModKey::Ptr m_recenter_view_key{ ModKey::create(generate_name("RecenterViewKey")) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
-    const ModToggle::Ptr m_use_afr{ ModToggle::create(generate_name("AlternateFrameRendering"), true) };
+    const ModToggle::Ptr m_use_async_aer{ ModToggle::create(generate_name("AsyncAER"), true) };
     const ModToggle::Ptr m_use_custom_view_distance{ ModToggle::create(generate_name("UseCustomViewDistance"), false) };
     const ModToggle::Ptr m_hmd_oriented_audio{ ModToggle::create(generate_name("HMDOrientedAudio"), true) };
     const ModSlider::Ptr m_view_distance{ ModSlider::create(generate_name("CustomViewDistance"), 10.0f, 3000.0f, 500.0f) };
@@ -643,7 +642,7 @@ private:
     ValueList m_options{
         *m_recenter_view_key,
 //        *m_decoupled_pitch,
-//        *m_use_afr,
+        *m_use_async_aer,
 //        *m_use_custom_view_distance,
 //        *m_hmd_oriented_audio,
 //        *m_view_distance,

@@ -58,11 +58,11 @@ struct VRRuntime {
         this->loaded = false;
     }
 
-    virtual Error synchronize_frame() {
+    virtual Error synchronize_frame(int frame) {
         return Error::SUCCESS;
     }
 
-    virtual Error update_poses() {
+    virtual Error update_poses(int frame) {
         return Error::SUCCESS;
     }
 
@@ -151,7 +151,7 @@ struct VRRuntime {
     bool VERTICAL_SYMMETRIC = true;
     bool HORIZONTAL_MIRROR = false;
     bool VERTICAL_MATCHED = false;
-    bool should_grow_rectangle_for_projection_cropping = false;
+    bool should_grow_rectangle_for_projection_cropping = true;
 
     SynchronizeStage custom_stage{SynchronizeStage::EARLY};
 };
