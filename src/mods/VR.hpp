@@ -91,7 +91,7 @@ public:
 //    void on_pre_end_rendering(void* entry);
     void on_end_rendering(void* entry);
 //    void on_pre_wait_rendering(void* entry);
-    void on_wait_rendering(void* entry);
+    void on_wait_rendering(int frame);
     auto get_backbuffer_size() const {
         if( m_is_d3d12) {
             return m_d3d12.get_backbuffer_size();
@@ -547,8 +547,7 @@ public:
     int m_engine_frame_count{0};
     int m_render_frame_count{0};
     int m_presenter_frame_count{0};
-//    int m_skip_frames{0};
-//    int m_sync_frame{0};
+    bool m_skip_next_present{false};
 
 private:
     int m_last_frame_count{-1};

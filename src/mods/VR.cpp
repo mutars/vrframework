@@ -823,6 +823,10 @@ VRRuntime::Eye VR::get_current_render_eye() const {
 
 void VR::on_present() {
     SCOPE_PROFILER();
+    if(m_skip_next_present) {
+        m_skip_next_present = false;
+        return;
+    }
 //    m_presenter_frame_count = m_render_frame_count;
     utility::ScopeGuard _guard {[&]() {
         if (is_using_async_aer() || (m_presenter_frame_count + 1) % 2 == m_left_eye_interval) {
@@ -886,7 +890,7 @@ void VR::on_present() {
     const auto renderer = g_framework->get_renderer_type();
     vr::EVRCompositorError e = vr::EVRCompositorError::VRCompositorError_None;
 
-    if (m_presenter_frame_count % 2 == m_left_eye_interval && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
+    if (((m_presenter_frame_count % 2 == m_left_eye_interval) || is_using_async_aer()) && runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::LATE) {
         //TODO LATE does not work
         const auto had_sync = runtime->got_first_sync;
         runtime->synchronize_frame(m_presenter_frame_count + 1);
@@ -951,7 +955,7 @@ void VR::on_post_present() {
     //TODO move to after engine tick
     detect_controllers();
 
-    if (m_presenter_frame_count % 2 == m_left_eye_interval) {
+    if (m_presenter_frame_count % 2 == m_left_eye_interval || is_using_async_aer()) {
         if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
             const auto had_sync = runtime->got_first_sync;
             runtime->synchronize_frame(m_presenter_frame_count);
@@ -1022,7 +1026,7 @@ void VR::on_end_rendering(void* entry) {
 //    m_render_frame_count = m_frame_count;
 }
 
-void VR::on_wait_rendering(void* entry) {
+void VR::on_wait_rendering(int frame) {
     if (!get_runtime()->loaded) {
         return;
     }
@@ -1037,7 +1041,7 @@ void VR::on_wait_rendering(void* entry) {
     // to be signaled
     // only on the left eye interval because we need the right eye
     // to start render work as soon as possible
-    if (((m_engine_frame_count) % 2) == m_left_eye_interval) {
+    if (((frame) % 2) == m_left_eye_interval || is_using_async_aer()) {
         if (WaitForSingleObject(m_present_finished_event, 333) == WAIT_TIMEOUT) {
 //            timed_out = true;
         }
@@ -1049,240 +1053,6 @@ void VR::on_xinput_get_capabilities(uint32_t* retval, uint32_t user_index, uint3
     if(m_lowest_xinput_user_index == user_index) {
         *retval = ERROR_SUCCESS;
     }
-}
-
-
-void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
-//    ZoneScopedN(__FUNCTION__);
-    auto pXinputGamepad = &state->Gamepad;
-
-//    if (std::chrono::steady_clock::now() - m_last_engine_tick > std::chrono::seconds(1)) {
-//        update_action_states();
-//    }
-
-
-    if (*retval == ERROR_SUCCESS) {
-        // Once here for normal gamepads, and once for the spoofed gamepad at the end
-//        update_imgui_state_from_xinput_state(*state, false);
-//        gamepad_snapturn(*state);
-    }
-
-    const auto now = std::chrono::steady_clock::now();
-
-    if (now - m_last_xinput_update > std::chrono::seconds(2)) {
-        m_lowest_xinput_user_index = user_index;
-    }
-
-    if (user_index < m_lowest_xinput_user_index) {
-        m_lowest_xinput_user_index = user_index;
-        spdlog::info("[VR] Changed lowest XInput user index to {}", user_index);
-    }
-
-    if (user_index != m_lowest_xinput_user_index) {
-        if (!m_spoofed_gamepad_connection && is_using_controllers()) {
-            spdlog::info("[VR] XInputGetState called, but user index is {}", user_index);
-        }
-
-        return;
-    }
-
-    if (!m_spoofed_gamepad_connection) {
-        spdlog::info("[VR] Successfully spoofed gamepad connection @ {}", user_index);
-    }
-
-    m_last_xinput_update = now;
-    m_spoofed_gamepad_connection = true;
-
-    if (is_using_controllers_within(std::chrono::minutes(5)))
-    if (is_using_controllers_within(std::chrono::minutes(5)))
-    {
-        *retval = ERROR_SUCCESS;
-
-    }
-
-    if (!is_using_controllers()) {
-        return;
-    }
-//    // Clear button state for VR controllers
-//    if (is_using_controllers_within(std::chrono::seconds(5))) {
-//        state->Gamepad.wButtons = 0;
-//        state->Gamepad.bLeftTrigger = 0;
-//        state->Gamepad.bRightTrigger = 0;
-//        state->Gamepad.sThumbLX = 0;
-//        state->Gamepad.sThumbLY = 0;
-//        state->Gamepad.sThumbRX = 0;
-//        state->Gamepad.sThumbRY = 0;
-//    }
-
-
-    const auto wants_swap = false;
-    const auto left_handed_layout = ModSettings::g_internalSettings.leftHandedControls;
-    const auto left_joystick = !wants_swap ? get_left_joystick():get_right_joystick();
-    const auto right_joystick = !wants_swap? get_right_joystick():get_left_joystick();
-
-    const auto& a_button_left = !wants_swap ? m_action_a_button_left : m_action_a_button_right;
-    const auto& a_button_right = !wants_swap ? m_action_a_button_right : m_action_a_button_left;
-
-    const auto is_right_a_button_down = is_action_active_any_joystick(a_button_right);
-    const auto is_left_a_button_down = is_action_active_any_joystick(a_button_left);
-
-    if (is_right_a_button_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_A;
-    }
-
-    if (is_left_a_button_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_B;
-    }
-
-    const auto& b_button_left = !wants_swap ? m_action_b_button_left : m_action_b_button_right;
-    const auto& b_button_right = !wants_swap ? m_action_b_button_right : m_action_b_button_left;
-
-    const auto is_right_b_button_down = is_action_active_any_joystick(b_button_right);
-    const auto is_left_b_button_down = is_action_active_any_joystick(b_button_left);
-
-    if (is_right_b_button_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_Y;
-    }
-
-    if (is_left_b_button_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_X;
-    }
-
-    const auto is_left_joystick_click_down = is_action_active(m_action_joystick_click, left_joystick);
-    const auto is_right_joystick_click_down = is_action_active(m_action_joystick_click, right_joystick);
-    {
-        if (is_left_joystick_click_down) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_LEFT_THUMB;
-        }
-
-        if (is_right_joystick_click_down) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_RIGHT_THUMB;
-        }
-    }
-
-    const auto is_left_trigger_down = is_action_active(m_action_trigger, left_joystick);
-    const auto is_right_trigger_down = is_action_active(m_action_trigger, right_joystick);
-    const auto is_left_grip_down = is_action_active(m_action_grip, !left_handed_layout ? left_joystick: right_joystick);
-    const auto is_right_grip_down = is_action_active(m_action_grip, !left_handed_layout ? right_joystick: left_joystick);
-
-
-    if(is_left_joystick_click_down && is_left_grip_down) {
-        static std::chrono::steady_clock::time_point m_last_grip_click = std::chrono::steady_clock::now();
-        if(std::chrono::steady_clock::now() - m_last_grip_click > std::chrono::milliseconds(500)) {
-            m_last_grip_click                           = std::chrono::steady_clock::now();
-//            ModSettings::g_game_state.setEnforceFlatScreen(!ModSettings::g_game_state.enforceFlatScreen);
-        }
-    }
-
-    const auto system_button_down = is_action_active_any_joystick(m_action_system_button);
-    if(system_button_down) {
-        if(is_left_grip_down) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_BACK;
-            pXinputGamepad->wButtons &= ~XINPUT_GAMEPAD_START;
-        } else {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_START;
-            pXinputGamepad->wButtons &= ~XINPUT_GAMEPAD_BACK;
-        }
-
-    } else {
-        pXinputGamepad->wButtons &= ~XINPUT_GAMEPAD_START;
-        pXinputGamepad->wButtons &= ~XINPUT_GAMEPAD_BACK;
-    }
-
-    if (is_right_grip_down) {
-        pXinputGamepad->bLeftTrigger = 255;
-    }
-
-    if (!is_left_grip_down && (is_right_trigger_down && !left_handed_layout || is_left_trigger_down && left_handed_layout)) {
-        pXinputGamepad->bRightTrigger = 255;
-    }
-
-    const auto thumbrest_touch_right_down = is_action_active_any_joystick(m_action_thumbrest_touch_right);
-    const auto thumbrest_touch_left_down = is_action_active_any_joystick(m_action_thumbrest_touch_left);
-
-
-    if (thumbrest_touch_right_down || is_left_grip_down && (is_right_trigger_down && !left_handed_layout || is_left_trigger_down && left_handed_layout)) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_RIGHT_SHOULDER;
-    }
-
-    if (is_left_trigger_down && !left_handed_layout || is_right_trigger_down && left_handed_layout || thumbrest_touch_left_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_LEFT_SHOULDER;
-    }
-
-    const auto is_dpad_up_down = is_action_active_any_joystick(m_action_dpad_up);
-
-    if (is_dpad_up_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_UP;
-    }
-
-    const auto is_dpad_right_down = is_action_active_any_joystick(m_action_dpad_right);
-
-    if (is_dpad_right_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
-    }
-
-    const auto is_dpad_down_down = is_action_active_any_joystick(m_action_dpad_down);
-
-    if (is_dpad_down_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
-    }
-
-    const auto is_dpad_left_down = is_action_active_any_joystick(m_action_dpad_left);
-
-    if (is_dpad_left_down) {
-        pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
-    }
-
-    const auto left_joystick_axis = get_joystick_axis(left_joystick);
-    const auto right_joystick_axis = get_joystick_axis(right_joystick);
-
-//    const auto true_left_joystick_axis = get_joystick_axis(m_left_joystick);
-//    const auto true_right_joystick_axis = get_joystick_axis(m_right_joystick);
-
-    pXinputGamepad->sThumbLX = (int16_t)std::clamp<float>(((float)pXinputGamepad->sThumbLX + left_joystick_axis.x * 32767.0f), -32767.0f, 32767.0f);
-    pXinputGamepad->sThumbLY = (int16_t)std::clamp<float>(((float)pXinputGamepad->sThumbLY + left_joystick_axis.y * 32767.0f), -32767.0f, 32767.0f);
-
-    pXinputGamepad->sThumbRX = (int16_t)std::clamp<float>(((float)pXinputGamepad->sThumbRX + right_joystick_axis.x * 32767.0f), -32767.0f, 32767.0f);
-    pXinputGamepad->sThumbRY = (int16_t)std::clamp<float>(((float)pXinputGamepad->sThumbRY + right_joystick_axis.y * 32767.0f), -32767.0f, 32767.0f);
-
-
-    // Touching the thumbrest allows us to use the thumbstick as a dpad.  Additional options are for controllers without capacitives/games that rely solely on DPad
-    if (is_left_grip_down) {
-
-        float ty{0.0f};
-        float tx{0.0f};
-        //SHORT ThumbY{0};
-        //SHORT ThumbX{0};
-        // If someone is accidentally touching both thumbrests while also moving a joystick, this will default to left joystick.
-
-        ty = left_joystick_axis.y; // ? wants_swap
-        tx = left_joystick_axis.x;
-
-        if (ty >= 0.5f) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_UP;
-        }
-
-        if (ty <= -0.5f) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
-        }
-
-        if (tx >= 0.5f) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
-        }
-
-        if (tx <= -0.5f) {
-            pXinputGamepad->wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
-        }
-
-        if (wants_swap) {
-            pXinputGamepad->sThumbRY = 0;
-            pXinputGamepad->sThumbRX = 0;
-        } else {
-            pXinputGamepad->sThumbLY = 0;
-            pXinputGamepad->sThumbLX = 0;
-        }
-    }
-
 }
 
 void VR::on_xinput_set_state(uint32_t* retval, uint32_t user_index, XINPUT_VIBRATION* vibration) {

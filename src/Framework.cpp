@@ -545,7 +545,9 @@ void Framework::on_frame_d3d12() {
 
     if (m_message_hook_requested) {
         initialize_windows_message_hook();
-        // initialize_xinput_hook();
+#ifdef HOOK_XINPUT
+        initialize_xinput_hook();
+#endif
         // initialize_dinput_hook();
     }
 
@@ -1575,7 +1577,9 @@ bool Framework::initialize() {
     }
 
     initialize_windows_message_hook();
-//    initialize_xinput_hook();
+#ifdef HOOK_XINPUT
+        initialize_xinput_hook();
+#endif
 
     if (m_first_frame) {
         m_dinput_hook = std::make_unique<DInputHook>(m_wnd);

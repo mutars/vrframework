@@ -7,7 +7,9 @@
 #include <mods/vr/d3d12/CommandContext.hpp>
 #include <sl.h>
 #include <sl_dlss.h>
-//#include <sl_dlss_d.h>
+#ifdef STREAMLINE_DLSS_RR
+#include <sl_dlss_d.h>
+#endif
 //#include <sl_deepdvc.h>
 #include <utility/PointerHook.hpp>
 #include <memory/FunctionHook.h>
@@ -39,7 +41,9 @@ private:
     void InstallHooks();
 
     // Motion vector reprojection component
+#ifdef MOTION_VECTOR_REPROJECTION
     MotionVectorReprojection m_motion_vector_reprojection{};
+#endif
 
     std::unique_ptr<FunctionHook> m_get_new_frame_token_hook{nullptr};
     std::unique_ptr<FunctionHook> m_set_tag_hook{nullptr};
@@ -62,7 +66,9 @@ private:
     static sl::Result on_slEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame, sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer);
     static sl::Result on_slSetConstants(sl::Constants& values, const sl::FrameToken& frame, sl::ViewportHandle& viewport);
     static sl::Result on_dlssSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSOptions& options);
-//    static sl::Result on_dlssrrSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSDOptions& options);
+#ifdef STREAMLINE_DLSS_RR
+    static sl::Result on_dlssrrSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSDOptions& options);
+#endif
 //    static sl::Result on_slDVCSetOptions(const sl::ViewportHandle& viewport, const sl::DeepDVCOptions& options);
     static sl::Result on_slAllocateResources(sl::CommandBuffer* cmdBuffer, sl::Feature feature, const sl::ViewportHandle& viewport);
     static sl::Result on_slFreeResources(sl::Feature feature, const sl::ViewportHandle& viewport);
@@ -73,6 +79,8 @@ private:
     
     ValueList m_options{
         *m_enabled,
+#ifdef MOTION_VECTOR_REPROJECTION
         *m_motion_vector_fix
+#endif
     };
 };

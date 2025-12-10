@@ -1,7 +1,8 @@
 #include "UpscalerAfrNvidiaModule.h"
 #ifdef _DEBUG
 #include <nvidia/ShaderDebugOverlay.h>
-#endif#include "sl_matrix_helpers.h"
+#endif
+#include "sl_matrix_helpers.h"
 #include <Framework.hpp>
 #include <experimental/DebugUtils.h>
 #include <imgui.h>
@@ -21,7 +22,9 @@ void UpscalerAfrNvidiaModule::on_draw_ui()
     }
 
     m_enabled->draw("Enable NVIDIA AFR");
+#ifdef MOTION_VECTOR_REPROJECTION
     m_motion_vector_fix->draw("Motion Vector Reprojection Fix");
+#endif
 }
 
 void UpscalerAfrNvidiaModule::on_config_load(const utility::Config& cfg, bool set_defaults)
@@ -40,12 +43,16 @@ void UpscalerAfrNvidiaModule::on_config_save(utility::Config& cfg)
 
 void UpscalerAfrNvidiaModule::on_device_reset()
 {
+#ifdef MOTION_VECTOR_REPROJECTION
     m_motion_vector_reprojection.on_device_reset();
+#endif
 }
 
 void UpscalerAfrNvidiaModule::on_d3d12_initialize(ID3D12Device4* pDevice4, D3D12_RESOURCE_DESC& desc)
 {
+#ifdef MOTION_VECTOR_REPROJECTION
     m_motion_vector_reprojection.on_d3d12_initialize(pDevice4, desc);
+#endif
 }
 
 void UpscalerAfrNvidiaModule::InstallHooks()
@@ -98,10 +105,14 @@ void UpscalerAfrNvidiaModule::InstallHooks()
 //        spdlog::error("Failed to hook slDLSSDSetOptions");
 //    }
 
-//    void* slDeepDVCSetOptionsFn;
-//    get_feature_function(sl::kFeatureDeepDVC, "slDeepDVCSetOptions", slDeepDVCSetOptionsFn);
-//    m_sl_dvc_set_options_hook = std::make_unique<FunctionHook>((void**)slDeepDVCSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_slDVCSetOptions);
-
+#ifdef STREAMLINE_DLSS_RR
+    void* slDLSSDSetOptionsFn;
+    get_feature_function(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", slDLSSDSetOptionsFn);
+    m_dlssrr_set_options_hook = std::make_unique<FunctionHook>((void**)slDLSSDSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssrrSetOptions);
+    if (!m_dlssrr_set_options_hook->create()) {
+        spdlog::error("Failed to hook slDLSSDSetOptions");
+    }
+#endif
 
     auto slAllocateResourcesFn = GetProcAddress(p_hm_sl_interposter, "slAllocateResources");
     m_allocate_resources_hook  = std::make_unique<FunctionHook>((void**)slAllocateResourcesFn, (void*)&UpscalerAfrNvidiaModule::on_slAllocateResources);
@@ -144,7 +155,7 @@ void UpscalerAfrNvidiaModule::InstallHooks()
     return result;
 }*/
 
-
+#ifdef MOTION_VECTOR_REPROJECTION
 void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame, sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer) {
     if(!m_motion_vector_reprojection.isInitialized()) {
         return;
@@ -178,6 +189,8 @@ void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame
 #endif
     }
 }
+#endif
+
 
 sl::Result UpscalerAfrNvidiaModule::on_slSetTag(sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
@@ -194,9 +207,16 @@ sl::Result UpscalerAfrNvidiaModule::on_slSetTag(sl::ViewportHandle& viewport, co
     return result;
 }
 
-bool supported_afr_feature(sl::Feature feature)
-{
-    return feature == sl::kFeatureDLSS;
+namespace {
+    bool supported_afr_feature(sl::Feature feature)
+    {
+#ifdef STREAMLINE_DLSS_RR
+        if(feature == sl::kFeatureDLSS_RR) {
+            return true;
+        }
+#endif
+        return feature == sl::kFeatureDLSS;
+    }
 }
 
 sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame, sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer)
@@ -220,10 +240,12 @@ sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, co
 //    }
 //
 //    uint32_t filteredNumInputs = static_cast<uint32_t>(filtered_inputs.size());
-
+#ifdef MOTION_VECTOR_REPROJECTION
+    //TODO might process same resrouce twice per frame we to track last processed resrouce per frame
     if(supported_afr_feature(feature)) {
         instance->ReprojectMotionVectors(frame, inputs, numInputs, cmdBuffer);
     }
+#endif
 
     if(frame % 2 == 0 && supported_afr_feature(feature) && instance->m_enabled->value()) {
         sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
@@ -266,17 +288,17 @@ sl::Result UpscalerAfrNvidiaModule::on_slSetConstants(sl::Constants& values, con
 //    return original_fn(viewport, options);
 //}
 
-
-//sl::Result UpscalerAfrNvidiaModule::on_dlssrrSetOptions(const sl::ViewportHandle &viewport, const sl::DLSSDOptions &options) {
-//    static auto     instance         = UpscalerAfrNvidiaModule::Get();
-//    static auto     original_fn      = instance->m_dlssrr_set_options_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_dlssrrSetOptions)>();
-//    {
-//        sl::ViewportHandle afr_viewport_handle{instance->afr_viewport_id};
-//        original_fn(afr_viewport_handle, options);
-//    }
-//    return original_fn(viewport, options);
-//}
-
+#ifdef STREAMLINE_DLSS_RR
+sl::Result UpscalerAfrNvidiaModule::on_dlssrrSetOptions(const sl::ViewportHandle &viewport, const sl::DLSSDOptions &options) {
+    static auto     instance         = UpscalerAfrNvidiaModule::Get();
+    static auto     original_fn      = instance->m_dlssrr_set_options_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_dlssrrSetOptions)>();
+    if(instance->m_enabled->value()) {
+        sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
+        original_fn(afr_viewport_handle, options);
+    }
+    return original_fn(viewport, options);
+}
+#endif
 
 sl::Result UpscalerAfrNvidiaModule::on_dlssSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSOptions& options)
 {
