@@ -129,13 +129,14 @@ void VariableRateShadingImage::on_d3d12_set_render_targets(ID3D12GraphicsCommand
     ID3D12Resource* pVRSResource = nullptr;
     /*if(num_rtvs < 5 || m_g_buffer_vrs->value()) */{
         for(UINT i = 0; i < num_rtvs; i++) {
-            if(auto match = m_rtv.find((rtvs + i)->ptr); match != m_rtv.end()) {
-                auto desc = match->second;
+            RTVDesc desc{};
+            if (!m_rtv.get((rtvs + i)->ptr, desc)) {
+                continue;
+            }
 
-                if(desc.w > 256 && desc.h > 256) {
-                    pVRSResource = GetResource(desc.w, desc.h);
-                    break;
-                }
+            if(desc.w > 256 && desc.h > 256) {
+                pVRSResource = GetResource(desc.w, desc.h);
+                break;
             }
         }
         cmd_list->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
@@ -148,7 +149,7 @@ void VariableRateShadingImage::on_d3d12_create_render_target_view(ID3D12Device* 
 {
     if(pResource) {
         const D3D12_RESOURCE_DESC& desc = pResource->GetDesc();
-        m_rtv[DestDescriptor.ptr] = { static_cast<int>(desc.Width), static_cast<int>(desc.Height)};
+        m_rtv.put(DestDescriptor.ptr, { static_cast<int>(desc.Width), static_cast<int>(desc.Height)});
     }
 
 }

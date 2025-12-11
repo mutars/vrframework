@@ -1,8 +1,12 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstdint>
+#include <list>
 #include <memory>
+#include <mutex>
+#include <unordered_map>
 #include <vector>
 
 #include <d3d12.h>
@@ -178,6 +182,78 @@ public:
 
 private:
 
+    template <typename Key, typename Value>
+    class LRUCache {
+    public:
+        explicit LRUCache(size_t capacity = 0) : m_capacity(capacity) {}
+
+        void clear() {
+            std::scoped_lock _{m_mutex};
+            m_items.clear();
+            m_lookup.clear();
+            m_size.store(0, std::memory_order_relaxed);
+        }
+
+        void put(const Key& key, const Value& value) {
+            if (m_capacity == 0) {
+                return;
+            }
+
+            std::unique_lock lock{m_mutex, std::try_to_lock};
+            if (!lock.owns_lock()) {
+                return;
+            }
+
+            auto it = m_lookup.find(key);
+            if (it != m_lookup.end()) {
+                it->second->second = value;
+                m_items.splice(m_items.begin(), m_items, it->second);
+                return;
+            }
+
+            if (m_items.size() >= m_capacity) {
+                const Key lastKey = m_items.back().first;
+                m_lookup.erase(lastKey);
+                m_items.pop_back();
+            }
+
+            m_items.push_front({key, value});
+            m_lookup[key] = m_items.begin();
+
+            m_size.store(m_items.size(), std::memory_order_relaxed);
+        }
+
+        bool get(const Key& key, Value& outValue) {
+            std::unique_lock lock{m_mutex, std::try_to_lock};
+            if (!lock.owns_lock()) {
+                return false;
+            }
+            auto it = m_lookup.find(key);
+            if (it == m_lookup.end()) {
+                return false;
+            }
+
+            m_items.splice(m_items.begin(), m_items, it->second);
+            outValue = it->second->second;
+            return true;
+        }
+
+        [[nodiscard]] size_t size() const {
+            return m_size.load(std::memory_order_relaxed);
+        }
+
+        [[nodiscard]] size_t capacity() const {
+            return m_capacity;
+        }
+
+    private:
+        mutable std::mutex m_mutex{};
+        std::atomic_size_t m_size{0};
+        std::list<std::pair<Key, Value>> m_items;
+        std::unordered_map<Key, typename std::list<std::pair<Key, Value>>::iterator> m_lookup;
+        size_t m_capacity{0};
+    };
+
     int findSlot(UINT tilesX, UINT tilesY, int& outSlot);
     bool recreateResources(ResourceSlot::D3D12ResourceWrapper& resource, UINT tilesX, UINT tilesY) const;
     bool updateContents(ResourceSlot::D3D12ResourceWrapper& resource, UINT i, UINT i1);
@@ -198,7 +274,8 @@ private:
         int w;
         int h;
     };
-    std::unordered_map<uintptr_t, RTVDesc> m_rtv{};
+    static constexpr size_t kMaxTrackedRtvs = 256;
+    LRUCache<uintptr_t, RTVDesc> m_rtv{kMaxTrackedRtvs};
 
 
 
