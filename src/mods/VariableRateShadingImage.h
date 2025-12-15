@@ -181,77 +181,82 @@ public:
 #endif
 
 private:
-
-    template <typename Key, typename Value>
+    struct RTVDesc {
+        int w{0};
+        int h{0};
+    };
     class LRUCache {
+        struct Node {
+            uintptr_t key{0};
+            RTVDesc val{};
+            Node* prev{};
+            Node* next{};
+        };
+
+        int size;
+        int capacity;
+        Node* head;
+        Node* tail;
+        std::unordered_map<uintptr_t, Node*> cache;
+        std::mutex m_lru_mutex{};
+
+
+        void removeNode(Node* node) {
+            node->prev->next = node->next;
+            node->next->prev = node->prev;
+        }
+
+        void addToHead(Node* node) {
+            node->next = head->next;
+            node->prev = head;
+            head->next->prev = node;
+            head->next = node;
+        }
+
     public:
-        explicit LRUCache(size_t capacity = 0) : m_capacity(capacity) {}
-
-        void clear() {
-            std::scoped_lock _{m_mutex};
-            m_items.clear();
-            m_lookup.clear();
-            m_size.store(0, std::memory_order_relaxed);
+        explicit LRUCache(const int capacity)
+            : size(0)
+            , capacity(capacity) {
+            head = new Node();
+            tail = new Node();
+            head->next = tail;
+            tail->prev = head;
         }
 
-        void put(const Key& key, const Value& value) {
-            if (m_capacity == 0) {
-                return;
-            }
-
-            std::unique_lock lock{m_mutex, std::try_to_lock};
-            if (!lock.owns_lock()) {
-                return;
-            }
-
-            auto it = m_lookup.find(key);
-            if (it != m_lookup.end()) {
-                it->second->second = value;
-                m_items.splice(m_items.begin(), m_items, it->second);
-                return;
-            }
-
-            if (m_items.size() >= m_capacity) {
-                const Key lastKey = m_items.back().first;
-                m_lookup.erase(lastKey);
-                m_items.pop_back();
-            }
-
-            m_items.push_front({key, value});
-            m_lookup[key] = m_items.begin();
-
-            m_size.store(m_items.size(), std::memory_order_relaxed);
-        }
-
-        bool get(const Key& key, Value& outValue) {
-            std::unique_lock lock{m_mutex, std::try_to_lock};
-            if (!lock.owns_lock()) {
+        bool get(const uintptr_t key, RTVDesc& outVal) {
+            if (!cache.contains(key)) {
                 return false;
             }
-            auto it = m_lookup.find(key);
-            if (it == m_lookup.end()) {
-                return false;
-            }
-
-            m_items.splice(m_items.begin(), m_items, it->second);
-            outValue = it->second->second;
+            std::scoped_lock _(m_lru_mutex);
+            Node* node = cache[key];
+            outVal = node->val;
+            removeNode(node);
+            addToHead(node);
             return true;
         }
 
-        [[nodiscard]] size_t size() const {
-            return m_size.load(std::memory_order_relaxed);
+        void put(const uintptr_t key, const RTVDesc value) {
+            std::scoped_lock _(m_lru_mutex);
+            if (cache.contains(key)) {
+                Node* node = cache[key];
+                node->val = value;
+                removeNode(node);
+                addToHead(node);
+            } else {
+                auto node = new Node();
+                node->key = key;
+                node->val = value;
+                cache[key] = node;
+                addToHead(node);
+                if (++size > capacity) {
+                    node = tail->prev;
+                    cache.erase(node->key);
+                    removeNode(node);
+                    delete node;
+                    --size;
+                }
+            }
         }
-
-        [[nodiscard]] size_t capacity() const {
-            return m_capacity;
-        }
-
-    private:
-        mutable std::mutex m_mutex{};
-        std::atomic_size_t m_size{0};
-        std::list<std::pair<Key, Value>> m_items;
-        std::unordered_map<Key, typename std::list<std::pair<Key, Value>>::iterator> m_lookup;
-        size_t m_capacity{0};
     };
 
     int findSlot(UINT tilesX, UINT tilesY, int& outSlot);
@@ -270,12 +275,9 @@ private:
 
     d3d12::CommandContext m_commandContext{};
     std::mutex m_mtx{};
-    struct RTVDesc {
-        int w;
-        int h;
-    };
+
     static constexpr size_t kMaxTrackedRtvs = 256;
-    LRUCache<uintptr_t, RTVDesc> m_rtv{kMaxTrackedRtvs};
+    LRUCache m_rtv{kMaxTrackedRtvs};
 
 
 

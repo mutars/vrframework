@@ -94,7 +94,6 @@ void VariableRateShadingImage::Reset() {
         slot.Reset();
     }
     m_tileSize = 0;
-    m_rtv.clear();
     m_supportsAdditionalRates = false;
 }
 
@@ -133,9 +132,8 @@ void VariableRateShadingImage::on_d3d12_set_render_targets(ID3D12GraphicsCommand
             if (!m_rtv.get((rtvs + i)->ptr, desc)) {
                 continue;
             }
-
-            if(desc.w > 256 && desc.h > 256) {
-                pVRSResource = GetResource(desc.w, desc.h);
+            pVRSResource = GetResource(desc.w, desc.h);
+            if (pVRSResource) {
                 break;
             }
         }
@@ -149,7 +147,9 @@ void VariableRateShadingImage::on_d3d12_create_render_target_view(ID3D12Device* 
 {
     if(pResource) {
         const D3D12_RESOURCE_DESC& desc = pResource->GetDesc();
-        m_rtv.put(DestDescriptor.ptr, { static_cast<int>(desc.Width), static_cast<int>(desc.Height)});
+        if(desc.Width > 1024 && desc.Height > 1024) {
+            m_rtv.put(DestDescriptor.ptr, { static_cast<int>(desc.Width), static_cast<int>(desc.Height)});
+        }
     }
 
 }
