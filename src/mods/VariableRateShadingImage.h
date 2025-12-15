@@ -15,8 +15,15 @@
 #include <mods/vr/d3d12/ComPtr.hpp>
 #include <mods/vr/d3d12/CommandContext.hpp>
 
+#ifndef VRS_MAX_TRACKED_RTVS
+#define VRS_MAX_TRACKED_RTVS 1024
+#endif
+
 using Microsoft::WRL::ComPtr;
 
+/**
+ * Needs to be added before VR
+ */
 class VariableRateShadingImage : public Mod {
 public:
     enum class LensDevice : uint8_t {
@@ -276,10 +283,7 @@ private:
     d3d12::CommandContext m_commandContext{};
     std::mutex m_mtx{};
 
-    static constexpr size_t kMaxTrackedRtvs = 256;
-    LRUCache m_rtv{kMaxTrackedRtvs};
-
-
+    LRUCache m_rtv{VRS_MAX_TRACKED_RTVS};
 
     const ModSlider::Ptr m_fine_radius{ ModSlider::create(generate_name("VRSFineRadius"), 0.0f, 1.0f, 0.7f) };
     const ModSlider::Ptr m_coarse_radius{ ModSlider::create(generate_name("VRSCoarseRadius"), 0.0f, 1.0f, 0.7f) };
