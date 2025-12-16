@@ -84,9 +84,39 @@ protected:
     int method67() { return 67; }
     int method68() { return 68; }
     int method69() { return 69; }
+    int method70() { return 70; }
+    int method71() { return 71; }
+    int method72() { return 72; }
+    int method73() { return 73; }
+    int method74() { return 74; }
+    int method75() { return 75; }
+    int method76() { return 76; }
+    int method77() { return 77; }
+    int method78() { return 78; }
+    int method79() { return 79; }
+    int method80() { return 80; }
+    int method81() { return 81; }
+    int method82() { return 82; }
+    int method83() { return 83; }
+    int method84() { return 84; }
+    int method85() { return 85; }
+    int method86() { return 86; }
+    int method87() { return 87; }
+    int method88() { return 88; }
+    int method89() { return 89; }
+    int method90() { return 90; }
+    int method91() { return 91; }
+    int method92() { return 92; }
+    int method93() { return 93; }
+    int method94() { return 94; }
+    int method95() { return 95; }
+    int method96() { return 96; }
+    int method97() { return 97; }
+    int method98() { return 98; }
+    int method99() { return 99; }
 
 protected:
-    typedef method_pointer fake_vtable_t [70];
+    typedef method_pointer fake_vtable_t [100];
     static fake_vtable_t   fake_vtable;
     static void*                  fake_vtable_ptr;
 };

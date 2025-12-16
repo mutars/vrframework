@@ -329,6 +329,8 @@ bool D3D12Hook::hook() {
         auto& set_scissor_rects_fn = (*(void***)cmd_list)[22];
         auto& set_viewports_fn = (*(void***)cmd_list)[21];
         auto& create_render_target_view_fn = (*(void***)device)[20];
+        // auto& set_shading_rate_image_fn = (*(void***)cmd_list)[78];
+        // auto& set_shading_rate = (*(void***)cmd_list)[77];
 //        auto& set_pipeline_state_fn = (*(void***)cmd_list)[25];
 //        auto Barriers = VtableIndexFinder::getIndexOf(&ID3D12GraphicsCommandList::ResourceBarrier);
 //        spdlog::info("ResourceBarrier offset: {}", Barriers);
