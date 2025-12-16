@@ -737,7 +737,10 @@ void VR::set_transform_offset(const Matrix4x4f& offset) {
 }
 
 void VR::recenter_view() {
-    set_transform_offset(glm::inverse(get_transform(0)));
+    auto current_hmd_state = get_transform(0);
+    auto new_rotation_offset = glm::mat4_cast(glm::normalize(utility::math::flatten(glm::quat{get_rotation(0)})));
+    new_rotation_offset[3] = current_hmd_state[3];
+    set_transform_offset(glm::inverse(new_rotation_offset));
 }
 
 glm::quat VR::get_gui_rotation_offset() {

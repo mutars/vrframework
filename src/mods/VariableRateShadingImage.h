@@ -231,10 +231,10 @@ private:
         }
 
         bool get(const uintptr_t key, RTVDesc& outVal) {
+            std::scoped_lock _(m_lru_mutex);
             if (!cache.contains(key)) {
                 return false;
             }
-            std::scoped_lock _(m_lru_mutex);
             Node* node = cache[key];
             outVal = node->val;
             removeNode(node);
