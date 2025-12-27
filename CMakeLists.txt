@@ -17,6 +17,8 @@ include(GNUInstallDirs)
 # Streamline version configuration
 set(STREAMLINE_VERSION "v2.4.15" CACHE STRING "Version of NVIDIA Streamline to use")
 
+option(INVERT_DEPTH_IN_SHADER "Invert depth in motion vector correction shader" OFF)
+
 #add_compile_definitions(GLM_FORCE_LEFT_HANDED)
 
 # CPM
@@ -158,13 +160,21 @@ if(COMPILE_SHADERS)
           motion_vector_correction_cs.hlsl
   )
 
+  set(SHADER_DEFINES)
+  if(INVERT_DEPTH_IN_SHADER)
+      list(APPEND SHADER_DEFINES /DINVERTED_DEPTH)
+  endif()
+  if(SHADER_GOW_FIX)
+      list(APPEND SHADER_DEFINES /DGOW_FIX)
+  endif()
+
   foreach(FILE ${HLSL_SHADER_FILES})
     get_filename_component(FILE_WE ${FILE} NAME_WE)
   #  list(APPEND CSO_SHADER_FILES ${CMAKE_BINARY_DIR}/${FILE_WE}.cso)
     get_source_file_property(shadertype ${FILE} ShaderType)
     get_source_file_property(functionentry ${FILE} Entry)
     add_custom_command(TARGET shaders
-                       COMMAND dxc.exe /nologo /E${functionentry} /T${shadertype} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fo ${CMAKE_BINARY_DIR}/${FILE_WE}.cso /Fh ${SHADER_HEADER_DIR}/${FILE_WE}.h /Fd ${CMAKE_BINARY_DIR}/${FILE_WE}.pdb ${FILE}
+                       COMMAND dxc.exe /nologo /E${functionentry} /T${shadertype} ${SHADER_DEFINES} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fo ${CMAKE_BINARY_DIR}/${FILE_WE}.cso /Fh ${SHADER_HEADER_DIR}/${FILE_WE}.h /Fd ${CMAKE_BINARY_DIR}/${FILE_WE}.pdb ${FILE}
                        MAIN_DEPENDENCY ${FILE}
                        COMMENT "HLSL ${FILE}"
                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/shaders/

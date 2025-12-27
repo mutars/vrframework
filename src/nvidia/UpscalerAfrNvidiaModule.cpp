@@ -169,22 +169,25 @@ void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame
             depthTag = (sl::ResourceTag*)inputs[i];
         }
     }
+    static auto vr = VR::get();
 
-    if(mvTag && depthTag) {
+    if(mvTag && depthTag && mvTag->resource && mvTag->resource->native && depthTag->resource && depthTag->resource->native) {
         auto mv_resource        = mvTag->resource;
-        auto mv_state           = (D3D12_RESOURCE_STATES)mv_resource->state;
+        auto mv_state           = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         auto mv_native_resource = (ID3D12Resource*)mv_resource->native;
+
         auto depth_resource        = depthTag->resource;
-        auto depth_state           = (D3D12_RESOURCE_STATES)depth_resource->state;
+        auto depth_state           = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         auto depth_native_resource = (ID3D12Resource*)depth_resource->native;
+
         auto command_list    = (ID3D12GraphicsCommandList*)cmdBuffer;
         if(m_enabled->value() && m_motion_vector_fix->value()) {
-            m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, frame, command_list);
+            m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, vr->m_render_frame_count, command_list);
         }
 #ifdef _DEBUG
         static auto shader_debug_overlay = ShaderDebugOverlay::Get();
         if(DebugUtils::config.debugShaders && ShaderDebugOverlay::ValidateResource(mv_native_resource, shader_debug_overlay->m_motion_vector_buffer)) {
-            ShaderDebugOverlay::CopyResource(command_list, mv_native_resource, shader_debug_overlay->m_motion_vector_buffer[frame % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
+            ShaderDebugOverlay::CopyResource(command_list, mv_native_resource, shader_debug_overlay->m_motion_vector_buffer[vr->m_render_frame_count % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
         }
 #endif
     }
@@ -241,8 +244,17 @@ sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, co
 //
 //    uint32_t filteredNumInputs = static_cast<uint32_t>(filtered_inputs.size());
 #ifdef MOTION_VECTOR_REPROJECTION
-    //TODO might process same resrouce twice per frame we to track last processed resrouce per frame
+    //TODO might process same resource twice per frame we to track last processed resource per frame
+
     if(supported_afr_feature(feature)) {
+        /**
+        * DLSS uses per-pixel motion vectors as a key component of its core algorithm. The motion vectors map a
+        * pixel from the current frame to its position in the previous frame. That is, when the motion vector for
+        * the pixel is added to the pixel's current location, the result is the location the pixel occupied in the
+        * previous frame
+        * MV = PAST - CURRENT
+        * DLSS internally expect mvector to be in UV space notmalized to [-1, 1] it's not NDC space
+        */
         instance->ReprojectMotionVectors(frame, inputs, numInputs, cmdBuffer);
     }
 #endif
@@ -270,6 +282,18 @@ sl::Result UpscalerAfrNvidiaModule::on_slSetConstants(sl::Constants& values, con
 {
     static auto instance = UpscalerAfrNvidiaModule::Get();
     static auto original_fn = instance->m_set_constants_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetConstants)>();
+#ifdef MOTION_VECTOR_REPROJECTION
+    instance->m_motion_vector_reprojection.m_mvecScale.x = values.mvecScale.x;
+    instance->m_motion_vector_reprojection.m_mvecScale.y = values.mvecScale.y;
+#endif
+
+#ifdef _DEBUG
+    if(DebugUtils::config.debugShaders) {
+        ShaderDebugOverlay::SetMvecScale(values.mvecScale.x, values.mvecScale.y);
+    }
+#endif
+
+
     if(frame % 2 == 0 && instance->m_enabled->value()) {
         sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
         return original_fn(values, frame, afr_viewport_handle);

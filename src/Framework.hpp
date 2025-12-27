@@ -169,6 +169,8 @@ public:
         m_has_engine_thread = true;
     }
 
+    friend class ShaderDebugOverlay;
+
 private:
         void save_config();
     void consume_input();
@@ -330,6 +332,7 @@ private: // D3D12 members
             IMGUI_FONT_VR,
             IMGUI_VR,
             BLANK,
+            DEBUG_OVERLAY,
             COUNT
         };
 

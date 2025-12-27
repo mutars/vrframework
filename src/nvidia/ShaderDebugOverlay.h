@@ -106,6 +106,12 @@ public:
     static void CopyResource(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pSrcResource, ID3D12Resource* pDstResource, D3D12_RESOURCE_STATES srcState,
                              D3D12_RESOURCE_STATES dstState);
 
+    static void SetMvecScale(const float x, const float y) {
+        const auto instance = Get();
+        instance->mvecScale.x = x;
+        instance->mvecScale.y = y;
+    }
+
 private:
     enum SRV_HEAP : unsigned int {
         MVEC = 0,
@@ -132,6 +138,8 @@ private:
     UINT m_debug_width{0};
     UINT m_debug_height{0};
     bool m_initialized{false};
+
+    glm::vec2 mvecScale {0.5f, -0.5f};
     
     // Shader configuration
     float m_scale{40.0f};           // Scale factor for visualization

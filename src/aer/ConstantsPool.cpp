@@ -37,12 +37,12 @@ namespace GlobalPool
 
 
     glm::mat4 get_correction_matrix(int frame, int past_frame) {
-        //[Important] this call happening with same frame count as engine, however in real it is one off frame
+        //[Important] this call happening with same frame count as engine, however in real it is one off frame ( GOW )
 
-        auto cameraViewToClip = *(float4x4*)&get_projection(frame-1);
+        auto cameraViewToClip = *(float4x4*)&get_projection(frame);
         auto cameraViewToClipPrev = *(float4x4*)&get_projection(past_frame);
-        auto cameraViewToWorld = getFinalViewToWorldMatrix(frame - 1);
-        auto cameraViewToWorldPrev = getFinalViewToWorldMatrix(past_frame - 1);
+        auto cameraViewToWorld = getFinalViewToWorldMatrix(frame);
+        auto cameraViewToWorldPrev = getFinalViewToWorldMatrix(past_frame);
 
         float4x4 clipToCameraView;
         matrixFullInvert(clipToCameraView, cameraViewToClip);

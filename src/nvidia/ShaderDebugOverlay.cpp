@@ -16,13 +16,21 @@ namespace shaders::debug {
     #include "debug_layer_vs.h"
 }
 #endif
+namespace
+{
+    struct ShaderConstants {
+        float scale;           // Scale factor for visualization
+        uint32_t channel_mask; // Bitmask: bit0=R, bit1=G, bit2=B, bit3=A
+        uint32_t show_abs;     // Show absolute values
+        uint32_t pad;          // Padding to align to 16 bytes
+        glm::vec2 mvecScale{0.5f, -0.5f};
+        glm::vec2 pad2;
+    };
+    static_assert(sizeof(ShaderConstants) % 16 == 0, "YourStruct size must be a multiple of 16 bytes");
+    constexpr int CONSTANTS_COUNT = sizeof(ShaderConstants) / 4;
+}
 
-struct ShaderConstants {
-    float scale;           // Scale factor for visualization
-    uint32_t channel_mask; // Bitmask: bit0=R, bit1=G, bit2=B, bit3=A
-    uint32_t show_abs;     // Show absolute values
-    uint32_t padding;      // Padding for alignment
-};
+
 
 bool ShaderDebugOverlay::CreateRootSignature(ID3D12Device* device)
 {
@@ -32,7 +40,7 @@ bool ShaderDebugOverlay::CreateRootSignature(ID3D12Device* device)
 
     descriptorRange[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_HEAP::COUNT, 0, 0);
     rootParams[0].InitAsDescriptorTable(1, &descriptorRange[0], D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParams[1].InitAsConstants(4, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    rootParams[1].InitAsConstants(CONSTANTS_COUNT, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
     CD3DX12_STATIC_SAMPLER_DESC staticSamplers[2];
 
     // D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
@@ -150,12 +158,12 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
 //    const auto& depthDesc      = m_depth_buffer[0]->GetDesc();
 //    auto depth_srv_desc = getSRVdesc1(depthDesc);
     static auto vr = VR::get();
-    const auto& mvectorDesc = m_motion_vector_buffer[vr->m_presenter_frame_count % 4]->GetDesc();
+    const auto& mvectorDesc = m_motion_vector_buffer[vr->m_render_frame_count % 4]->GetDesc();
     auto mvector_srv_desc = getSRVdesc1(mvectorDesc);
 
-    auto modulo_frame = vr->m_presenter_frame_count % 2 == 0 ? 0 : -1;
+    auto modulo_frame = vr->m_render_frame_count % 2 == 0 ? 0 : -1;
 
-    device->CreateShaderResourceView(m_motion_vector_buffer[(vr->m_presenter_frame_count + modulo_frame)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
+    device->CreateShaderResourceView(m_motion_vector_buffer[(vr->m_render_frame_count + modulo_frame)% 4].Get(), &mvector_srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC));
 //    device->CreateShaderResourceView(mvReprojection->m_depth_buffer[0].Get(), &depth_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::DEPTH));
 //    device->CreateShaderResourceView(mvReprojection->m_motion_vector_buffer[2].Get(), &mvector_srv_desc, m_debug_heap->GetCpuHandle(SRV_HEAP::MVEC_PROCESSED));
 
@@ -176,6 +184,7 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
     constants.scale = m_scale;
     constants.channel_mask = m_debug_axis;
     constants.show_abs = m_show_abs ? 1 : 0;
+    constants.mvecScale = mvecScale;
 
     commandList->SetPipelineState(m_debug_layer_pso.Get());
 //    commandList->ClearRenderTargetView(*rtv_handle, clear_color, 1, &scissor_rect);
@@ -187,7 +196,7 @@ void ShaderDebugOverlay::Draw(ID3D12GraphicsCommandList* commandList, ID3D12Reso
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
-    commandList->SetGraphicsRoot32BitConstants(1, 4, &constants, 0);
+    commandList->SetGraphicsRoot32BitConstants(1, CONSTANTS_COUNT, &constants, 0);
 
     ID3D12DescriptorHeap* descriptorHeaps[] = { m_srv_heap->Heap()
     };
@@ -324,6 +333,9 @@ bool ShaderDebugOverlay::setup(ID3D12Device* device, D3D12_RESOURCE_DESC& backBu
     device->CreateRenderTargetView(m_image1.Get(), nullptr, m_rtv_heap->GetCpuHandle(0));
     device->CreateShaderResourceView(m_image1.Get(), &srv_desc, m_srv_heap->GetCpuHandle(SRV_HEAP::MVEC_PROCESSED));
     
+    // Also create SRV in Framework heap for ImGui
+    device->CreateShaderResourceView(m_image1.Get(), &srv_desc, g_framework->m_d3d12.get_cpu_srv(device, Framework::D3D12::SRV::DEBUG_OVERLAY));
+
     m_initialized = true;
     spdlog::info("[ShaderDebug] Initialized with debug texture {}x{}", m_debug_width, m_debug_height);
     return true;
@@ -392,7 +404,9 @@ void ShaderDebugOverlay::on_draw_ui()
             displayWidth = displayHeight * aspectRatio;
         }
         
-        ImGui::Image((ImTextureID)m_srv_heap->GetGpuHandle(SRV_HEAP::MVEC_PROCESSED).ptr, ImVec2(displayWidth, displayHeight));
+        auto device = g_framework->get_d3d12_hook()->get_device();
+        auto gpu_handle = g_framework->m_d3d12.get_gpu_srv(device, Framework::D3D12::SRV::DEBUG_OVERLAY);
+        ImGui::Image((ImTextureID)gpu_handle.ptr, ImVec2(displayWidth, displayHeight));
     }
     ImGui::End();
 }

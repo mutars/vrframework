@@ -1,8 +1,6 @@
 #include "UpscalerFsr31Module.h"
 
 #include <experimental/DebugUtils.h>
-#include <ffx_api/ffx_api.h>
-#include <ffx_api/ffx_upscale.h>
 #include <imgui.h>
 #ifdef _DEBUG
 #include <nvidia/ShaderDebugOverlay.h>
@@ -135,7 +133,7 @@ ffxReturnCode_t UpscalerFsr31Module::on_ffxDispatch(ffxContext* context, const f
         instance->ReprojectMotionVectors((ffxDispatchDescUpscale*)desc);
 
         ffxContext* target_context;
-        if (vr->m_engine_frame_count % 2 == 0) {
+        if (vr->m_render_frame_count % 2 == 0) {
             target_context = context;
         } else {
             target_context = &instance->m_context_right;
@@ -162,13 +160,18 @@ void UpscalerFsr31Module::ReprojectMotionVectors(ffxDispatchDescUpscale* upscale
         auto depth_native_resource        = (ID3D12Resource*)depthTag.resource;
         auto depth_state           = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         auto command_list    = (ID3D12GraphicsCommandList*)upscalerDesc->commandList;
+#ifdef MOTION_VECTOR_REPROJECTION
         if(m_enabled->value() && m_motion_vector_fix->value()) {
-            m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, vr->m_engine_frame_count, command_list);
+            m_motion_vector_reprojection.m_mvecScale.x = upscalerDesc->motionVectorScale.x / (float)mvTag.description.width;
+            m_motion_vector_reprojection.m_mvecScale.y = upscalerDesc->motionVectorScale.y / (float)mvTag.description.height;
+            m_motion_vector_reprojection.ProcessMotionVectors(mv_native_resource, mv_state, depth_native_resource, depth_state, vr->m_render_frame_count, command_list);
         }
+#endif
 #ifdef _DEBUG
         static auto shader_debug_overlay = ShaderDebugOverlay::Get();
         if(DebugUtils::config.debugShaders && ShaderDebugOverlay::ValidateResource(mv_native_resource, shader_debug_overlay->m_motion_vector_buffer)) {
-            ShaderDebugOverlay::CopyResource(command_list, mv_native_resource, shader_debug_overlay->m_motion_vector_buffer[vr->m_engine_frame_count % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
+            ShaderDebugOverlay::SetMvecScale(upscalerDesc->motionVectorScale.x / (float)mvTag.description.width , upscalerDesc->motionVectorScale.y / (float)mvTag.description.height);
+            ShaderDebugOverlay::CopyResource(command_list, mv_native_resource, shader_debug_overlay->m_motion_vector_buffer[vr->m_render_frame_count % 4].Get(), mv_state, D3D12_RESOURCE_STATE_GENERIC_READ);
         }
 #endif
     }

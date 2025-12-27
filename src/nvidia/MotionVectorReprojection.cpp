@@ -11,13 +11,18 @@ namespace shaders::compute {
 namespace
 {
 
-    struct alignas(4) MotionVectorCorrectionConstants
+    struct MotionVectorCorrectionConstants
     {
         glm::mat4 undoCameraMotion{};
         glm::mat4 cameraMotionCorrection{};
-        XMFLOAT4  texSize{};
+        glm::vec4 texSize{};
+        glm::vec2 mvecScale{0.5f, -0.5f};
+        glm::vec2 pad;
     };
-    static const int CONSTANTS_COUNT = sizeof(MotionVectorCorrectionConstants) / 4;
+    //TODO it looks like there is no clear requirements on alignment for compute root signature, this probably overkill
+    //TODO none of resources actually tells that it has to be 16 byes aligned for root Signature
+    static_assert(sizeof(MotionVectorCorrectionConstants) % 16 == 0, "YourStruct size must be a multiple of 16 bytes");
+    constexpr int CONSTANTS_COUNT = sizeof(MotionVectorCorrectionConstants) / 4;
 }
 bool MotionVectorReprojection::CreateComputeRootSignature(ID3D12Device* device)
 {
@@ -26,7 +31,7 @@ bool MotionVectorReprojection::CreateComputeRootSignature(ID3D12Device* device)
     CD3DX12_ROOT_PARAMETER1 rootParams[3];
 
     // SRV descriptor table
-    srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_UAV::COUNT, 0, 0); // 3 SRVs starting at slot 0
+    srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, d3d12::SRV_UAV_COUNT, 0, 0); // 3 SRVs starting at slot 0
     rootParams[0].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_ALL);
 
     // UAV descriptor table
@@ -64,16 +69,6 @@ bool MotionVectorReprojection::CreateComputeRootSignature(ID3D12Device* device)
     return true;
 }
 
-D3D12_SHADER_RESOURCE_VIEW_DESC getSRVdesc(const D3D12_RESOURCE_DESC& desc) {
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = MotionVectorReprojection::getCorrectDXGIFormat(desc.Format);
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Texture2D.MipLevels = desc.MipLevels;
-    srvDesc.Texture2D.MostDetailedMip = 0; // Start viewing from the highest resolution mip
-    return srvDesc;
-}
-
 void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector, D3D12_RESOURCE_STATES mv_state, ID3D12Resource* depth1, D3D12_RESOURCE_STATES depth_state, uint32_t frame, ID3D12GraphicsCommandList* cmd_list)
 {
     auto device = g_framework->get_d3d12_hook()->get_device();
@@ -81,58 +76,39 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
         return;
     }
 
-    // Transition resources to compute shader read/write states
     D3D12_RESOURCE_BARRIER barriers[3] = {
         CD3DX12_RESOURCE_BARRIER::Transition(depth1, depth_state, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(motionVector, mv_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
         CD3DX12_RESOURCE_BARRIER::UAV(motionVector)
     };
-    cmd_list->ResourceBarrier(2, barriers);
+    cmd_list->ResourceBarrier(3, barriers);
 
-    // Set compute root signature and PSO
     cmd_list->SetComputeRootSignature(m_computeRootSignature.Get());
     cmd_list->SetPipelineState(m_compute_pso.Get());
+
+    auto& motionVectorResource = m_small_ring_pool.getUavSlot(motionVector);
     
-    // Set heaps
-    ID3D12DescriptorHeap* heaps[] = { m_compute_heap->Heap()};
+    ID3D12DescriptorHeap* heaps[] = { m_small_ring_pool.m_compute_heap->Heap()};
     cmd_list->SetDescriptorHeaps(1, heaps);
+    cmd_list->SetComputeRootDescriptorTable(0, m_small_ring_pool.GetGpuSrvHandle(depth1));
+    cmd_list->SetComputeRootDescriptorTable(1, m_small_ring_pool.m_compute_heap->GetGpuHandle(motionVectorResource.heapIndex));
 
-    const auto& depthDesc      = depth1->GetDesc();
-    auto depth_srv_desc = getSRVdesc(depthDesc);
-
-    //TODO try to maintain map for UAV
-    device->CreateShaderResourceView(depth1, &depth_srv_desc, m_compute_heap->GetCpuHandle(SRV_UAV::DEPTH_CURRENT));
-
-    device->CreateUnorderedAccessView(
-            motionVector,
-            nullptr,
-            nullptr, m_compute_heap->GetCpuHandle(SRV_UAV::MVEC_UAV)
-    );
-
-    // Set descriptor tables
-    cmd_list->SetComputeRootDescriptorTable(0, m_compute_heap->GetFirstGpuHandle());
-    cmd_list->SetComputeRootDescriptorTable(1, m_compute_heap->GetGpuHandle(SRV_UAV::MVEC_UAV));
-
-    // Set constants
     MotionVectorCorrectionConstants constants{};
-    auto desc = motionVector->GetDesc();
-    constants.texSize.x = (float) desc.Width;
-    constants.texSize.y = (float) desc.Height;
-    constants.texSize.z = 1.0f /  (float) desc.Width;
-    constants.texSize.w = 1.0f /  (float) desc.Height;
+    constants.texSize.x = static_cast<float>(motionVectorResource.Width);
+    constants.texSize.y = static_cast<float>(motionVectorResource.Height);
+    constants.texSize.z = 1.0f /  static_cast<float>(motionVectorResource.Width);
+    constants.texSize.w = 1.0f /  static_cast<float>(motionVectorResource.Height);
+    constants.mvecScale = m_mvecScale;
 
     constants.undoCameraMotion = GlobalPool::get_correction_matrix((int)frame, ((int)frame - 1));
     constants.cameraMotionCorrection = GlobalPool::get_correction_matrix((int)frame, ((int)frame - 2));
     cmd_list->SetComputeRoot32BitConstants(2, CONSTANTS_COUNT, &constants, 0);
 
-    // Get dimensions for dispatch
-    UINT width = static_cast<UINT>(desc.Width);
-    UINT height = static_cast<UINT>(desc.Height);
+    const UINT width = motionVectorResource.Width;
+    const UINT height = motionVectorResource.Height;
     
-    // Dispatch compute shader
     cmd_list->Dispatch((width + 15) / 16, (height + 15) / 16, 1);
     
-    // Transition back to original states
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.StateAfter = depth_state;
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -165,16 +141,8 @@ bool MotionVectorReprojection::CreatePipelineStates(ID3D12Device* device, DXGI_F
 
 void MotionVectorReprojection::on_d3d12_initialize(ID3D12Device* device, const D3D12_RESOURCE_DESC& backBuffer_desc)
 {
-    try {
-        m_compute_heap = std::make_unique<DirectX::DescriptorHeap>(device,
-                                                                   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                                                                   D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                                                                   SRV_UAV::COUNT);
 
-    } catch(...) {
-        spdlog::error("Failed to create SRV/RTV descriptor heap for MotionVectorFix");
-        return;
-    }
+    m_small_ring_pool.Init(device);
     if (!CreateComputeRootSignature(device) ||
         !CreatePipelineStates(device, DXGI_FORMAT_R10G10B10A2_UNORM))
     {

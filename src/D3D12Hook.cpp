@@ -426,6 +426,12 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
         present_fn = d3d12->m_swapchain_hook->get_method<decltype(D3D12Hook::present)*>(8);
     }*/
 
+    if ((flags & DXGI_PRESENT_TEST) == DXGI_PRESENT_TEST)
+    {
+        // Ignore TEST_PRESENT flag
+        return present_fn(swap_chain, sync_interval, flags);
+    }
+
     if (d3d12->m_is_phase_1 && WindowFilter::get().is_filtered(swapchain_wnd)) {
         //present_fn = d3d12->m_present_hook->get_original<decltype(D3D12Hook::present)*>();
         return present_fn(swap_chain, sync_interval, flags);

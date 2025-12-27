@@ -6,7 +6,9 @@ cbuffer Constants : register(b0)
     uint   channel_mask;  // Bitmask: bit0=R, bit1=G, bit2=B, bit3=A
     uint   show_abs;      // Show absolute values
     uint   padding;
-}
+    float2 mvecScale;
+    float2 padding2;
+} //TODO none of resrouces actually tells that it has to me 16 byes aligned for root Signature
 
 
 Texture2D<float2> mvec : register(t0);
@@ -21,6 +23,7 @@ float4 ps_main(CommonVertex inp) : SV_TARGET {
 
     float2 result = mvec.Sample(PointSampler, modifiedUV);
     float4 outputColor = float4(0, 0, 0, 1);
+    result = result * mvecScale;
     result = result * scale;
 
     if(show_abs) {
