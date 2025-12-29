@@ -31,11 +31,11 @@ bool MotionVectorReprojection::CreateComputeRootSignature(ID3D12Device* device)
     CD3DX12_ROOT_PARAMETER1 rootParams[3];
 
     // SRV descriptor table
-    srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, d3d12::SRV_UAV_COUNT, 0, 0); // 3 SRVs starting at slot 0
+    srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, d3d12::MAX_SMALL_RING_POOL_SIZE, 0, 0); // 3 SRVs starting at slot 0
     rootParams[0].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_ALL);
 
     // UAV descriptor table
-    uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); // 1 UAV at slot 0
+    uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, d3d12::MAX_SMALL_RING_POOL_SIZE, 0, 0); // 1 UAV at slot 0
     rootParams[1].InitAsDescriptorTable(1, &uavRange, D3D12_SHADER_VISIBILITY_ALL);
 
     // Constants
@@ -86,7 +86,7 @@ void MotionVectorReprojection::ProcessMotionVectors(ID3D12Resource* motionVector
     cmd_list->SetComputeRootSignature(m_computeRootSignature.Get());
     cmd_list->SetPipelineState(m_compute_pso.Get());
 
-    auto& motionVectorResource = m_small_ring_pool.getUavSlot(motionVector);
+    auto& motionVectorResource = m_small_ring_pool.GetUAVSlot(motionVector);
     
     ID3D12DescriptorHeap* heaps[] = { m_small_ring_pool.m_compute_heap->Heap()};
     cmd_list->SetDescriptorHeaps(1, heaps);
@@ -137,6 +137,122 @@ bool MotionVectorReprojection::CreatePipelineStates(ID3D12Device* device, DXGI_F
     }
 
     return true;
+}
+
+DXGI_FORMAT d3d12::getCorrectDXGIFormat(DXGI_FORMAT Format)
+{
+    switch (Format) {
+        case DXGI_FORMAT_D16_UNORM: // casting from non typeless is supported from RS2+
+            return DXGI_FORMAT_R16_UNORM;
+        case DXGI_FORMAT_D32_FLOAT: // casting from non typeless is supported from RS2+
+        case DXGI_FORMAT_R32_TYPELESS:
+            return DXGI_FORMAT_R32_FLOAT;
+        case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+            return DXGI_FORMAT_R16G16B16A16_FLOAT;
+        case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+            return DXGI_FORMAT_R32G32B32A32_FLOAT;
+        case DXGI_FORMAT_R32G32_TYPELESS:
+            return DXGI_FORMAT_R32G32_FLOAT;
+        case DXGI_FORMAT_R16G16_TYPELESS:
+            return DXGI_FORMAT_R16G16_FLOAT;
+        case DXGI_FORMAT_R16_TYPELESS:
+            return DXGI_FORMAT_R16_FLOAT;
+        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+            return DXGI_FORMAT_R8G8B8A8_UNORM;
+        case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+            return DXGI_FORMAT_B8G8R8X8_UNORM;
+        case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+            return DXGI_FORMAT_B8G8R8A8_UNORM;
+        case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+            return DXGI_FORMAT_R10G10B10A2_UNORM;
+        case DXGI_FORMAT_D24_UNORM_S8_UINT: // casting from non typeless is supported from RS2+
+        case DXGI_FORMAT_R24G8_TYPELESS:
+            return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT: // casting from non typeless is supported from RS2+
+        case DXGI_FORMAT_R32G8X24_TYPELESS:
+            return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+        default:
+            return Format;
+        }
+}
+
+D3D12_SHADER_RESOURCE_VIEW_DESC d3d12::getSRVdesc(const D3D12_RESOURCE_DESC& desc)
+{
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = getCorrectDXGIFormat(desc.Format);
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = desc.MipLevels;
+    srvDesc.Texture2D.MostDetailedMip = 0; // Start viewing from the highest resolution mip
+    return srvDesc;
+}
+
+d3d12::RingResource& d3d12::SmallRingPool::GetSRVSlot(ID3D12Resource* pDepth)
+{
+    auto ptr = reinterpret_cast<uintptr_t>(pDepth);
+    for (auto &ring_resource : srv_pool) {
+        if (ring_resource.heapIndex > 0 && ring_resource.resource_ptr == ptr) {
+            return ring_resource;
+        }
+    }
+    current_srv_pool_index = (current_srv_pool_index + 1) % MAX_SMALL_RING_POOL_SIZE;
+    int index = current_srv_pool_index;
+    srv_pool[index].resource_ptr = ptr;
+    srv_pool[index].heapIndex = index + (int)SRV_HEAP_START;
+    auto desc = pDepth->GetDesc();
+    srv_pool[index].Width = static_cast<unsigned int>(desc.Width);
+    srv_pool[index].Height = desc.Height;
+    auto srv_desc = getSRVdesc(desc);
+    m_pDevice->CreateShaderResourceView(pDepth, &srv_desc, m_compute_heap->GetCpuHandle(srv_pool[index].heapIndex));
+    return srv_pool[index];
+}
+
+d3d12::RingResource& d3d12::SmallRingPool::GetUAVSlot(ID3D12Resource* pMVec)
+{
+    const auto ptr = reinterpret_cast<uintptr_t>(pMVec);
+    for (auto &ring_resource : uav_pool) {
+        if (ring_resource.heapIndex > 0 && ring_resource.resource_ptr == ptr) {
+            return ring_resource;
+        }
+    }
+    current_uav_pool_index = (current_uav_pool_index + 1) % MAX_SMALL_RING_POOL_SIZE;
+    int index = current_uav_pool_index;
+    uav_pool[index].resource_ptr = ptr;
+    uav_pool[index].heapIndex = index + (int)UAV_HEAP_START;
+    auto desc = pMVec->GetDesc();
+    uav_pool[index].Width = static_cast<unsigned int>(desc.Width);
+    uav_pool[index].Height = desc.Height;
+    m_pDevice->CreateUnorderedAccessView(
+            pMVec,
+            nullptr,
+            nullptr, m_compute_heap->GetCpuHandle(uav_pool[index].heapIndex)
+    );
+    return uav_pool[index];
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE d3d12::SmallRingPool::GetGpuSrvHandle(ID3D12Resource* pResource)
+{
+    RingResource& slot = GetSRVSlot(pResource);
+    return m_compute_heap->GetGpuHandle(slot.heapIndex);
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE d3d12::SmallRingPool::GetGpuUavHandle(ID3D12Resource* pResource)
+{
+    auto& slot = GetUAVSlot(pResource);
+    return m_compute_heap->GetGpuHandle(slot.heapIndex);
+}
+
+void d3d12::SmallRingPool::Init(ID3D12Device* pDevice)
+{
+    try {
+        m_compute_heap = std::make_unique<DescriptorHeap>(pDevice,
+                                                                   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                                                   D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                                                                   SRV_UAV_COUNT);
+        m_pDevice = pDevice;
+    } catch(...) {
+        spdlog::error("Failed to create SRV/RTV descriptor heap for MotionVectorFix");
+    }
 }
 
 void MotionVectorReprojection::on_d3d12_initialize(ID3D12Device* device, const D3D12_RESOURCE_DESC& backBuffer_desc)
