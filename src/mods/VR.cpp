@@ -786,10 +786,14 @@ Matrix4x4f VR::get_current_eye_transform(bool flip) {
     auto mod_count = flip ? m_right_eye_interval : m_left_eye_interval;
 
     if (m_engine_frame_count % 2 == mod_count) {
-        return get_runtime()->eyes[vr::Eye_Left];
+        auto leye = get_runtime()->eyes[vr::Eye_Left];
+        leye[3] = glm::vec4(glm::vec3(leye[3]) * m_world_scale_option->value(), 1.0f);
+        return leye;
     }
 
-    return get_runtime()->eyes[vr::Eye_Right];
+    auto reye = get_runtime()->eyes[vr::Eye_Right];
+    reye[3] = glm::vec4(glm::vec3(reye[3]) * m_world_scale_option->value(), 1.0f);
+    return reye;
 }
 
 //Matrix4x4f VR::get_current_projection_matrix(bool flip) {
@@ -1189,7 +1193,7 @@ void VR::on_draw_ui() {
 
 //    m_ui_scale_option->draw("2D UI Scale");
 //    m_ui_distance_option->draw("2D UI Distance");
-//    m_world_ui_scale_option->draw("World-Space UI Scale");
+    m_world_scale_option->draw("World-Space Scale");
 
 //    ImGui::DragFloat3("Overlay Rotation", (float*)&m_overlay_rotation, 0.01f, -360.0f, 360.0f);
 //    ImGui::DragFloat3("Overlay Position", (float*)&m_overlay_position, 0.01f, -100.0f, 100.0f);

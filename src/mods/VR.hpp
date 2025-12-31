@@ -611,7 +611,7 @@ private:
     const ModSlider::Ptr m_joystick_deadzone{ ModSlider::create(generate_name("JoystickDeadzone"), 0.01f, 0.9f, 0.15f) };
     const ModSlider::Ptr m_ui_scale_option{ ModSlider::create(generate_name("2DUIScale"), 1.0f, 100.0f, 12.0f) };
     const ModSlider::Ptr m_ui_distance_option{ ModSlider::create(generate_name("2DUIDistance"), 0.01f, 100.0f, 1.0f) };
-    const ModSlider::Ptr m_world_ui_scale_option{ ModSlider::create(generate_name("WorldSpaceUIScale"), 1.0f, 100.0f, 15.0f) };
+    const ModSlider::Ptr m_world_scale_option{ ModSlider::create(generate_name("WorldSpaceScale"), 0.5f, 2.0f, 1.0f) };
     const ModSlider::Ptr m_resolution_scale{ ModSlider::create(generate_name("OpenXRResolutionScale"), 0.1f, 5.0f, 1.0f) };
 
     const ModToggle::Ptr m_force_fps_settings{ ModToggle::create(generate_name("ForceFPS"), true) };
@@ -657,7 +657,7 @@ private:
 //        *m_force_dynamic_shadows_settings,
 //        *m_ui_scale_option,
 //        *m_ui_distance_option,
-//        *m_world_ui_scale_option,
+        *m_world_scale_option,
 //        *m_allow_engine_overlays,
         *m_resolution_scale,
         *m_desktop_fix,
