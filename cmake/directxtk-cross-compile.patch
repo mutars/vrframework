@@ -1,0 +1,23 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1234567..abcdefg 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -224,6 +224,18 @@ if(NOT USE_PREBUILT_SHADERS)
+     if(NOT dxc_path)
+         find_program(fxc_path NAMES fxc.exe)
+     endif()
++    
++    # For cross-compilation without shader compiler, create dummy shader headers
++    if(CMAKE_CROSSCOMPILING AND NOT fxc_path AND NOT dxc_path)
++        message(WARNING "No shader compiler available for cross-compilation. Creating dummy shader headers.")
++        foreach(shader_file ${SHADER_SOURCES})
++            get_filename_component(shader_name ${shader_file} NAME_WE)
++            file(WRITE "${COMPILED_SHADERS}/${shader_name}.inc" 
++                "// Dummy shader - compile on Windows for actual shader\nconst uint8_t ${shader_name}[] = { 0 };\n")
++        endforeach()
++        set(USE_PREBUILT_SHADERS ON)
++    endif()
++    
+     if(dxc_path OR fxc_path)
+         add_custom_command(
+             OUTPUT "${COMPILED_SHADERS}/SpriteEffect_SpriteVertexShader.inc"

@@ -6,7 +6,7 @@
 #include "utility/Thread.hpp"
 
 #include "WindowsMessageHook.hpp"
-#include <SafetyHook.hpp>
+#include <safetyhook.hpp>
 
 using namespace std;
 

@@ -36,7 +36,11 @@ include("cmake/glm.cmake")
 include("cmake/safetyhook.cmake")
 #include("cmake/polyhook.cmake")
 include("cmake/kananlib.cmake")
-include("cmake/directxtk.cmake")
+if(CMAKE_CROSSCOMPILING)
+    include("cmake/directxtk_linux.cmake")
+else()
+    include("cmake/directxtk.cmake")
+endif()
 include("cmake/openxr.cmake")
 include("cmake/streamline.cmake")
 include("cmake/imgui.cmake")
@@ -143,7 +147,7 @@ target_compile_options(
     $<$<CONFIG:Debug>:/EHa>
 )
 
-if(COMPILE_SHADERS)
+if(COMPILE_SHADERS AND NOT CMAKE_CROSSCOMPILING)
   set(SHADER_HEADER_DIR ${CMAKE_BINARY_DIR}/shader-headers)
   file(MAKE_DIRECTORY ${SHADER_HEADER_DIR})
 
@@ -168,13 +172,15 @@ if(COMPILE_SHADERS)
       list(APPEND SHADER_DEFINES /DGOW_FIX)
   endif()
 
+  # Use dxc.exe on Windows
+  set(DXC_COMMAND "dxc.exe")
+
   foreach(FILE ${HLSL_SHADER_FILES})
     get_filename_component(FILE_WE ${FILE} NAME_WE)
-  #  list(APPEND CSO_SHADER_FILES ${CMAKE_BINARY_DIR}/${FILE_WE}.cso)
     get_source_file_property(shadertype ${FILE} ShaderType)
     get_source_file_property(functionentry ${FILE} Entry)
     add_custom_command(TARGET shaders
-                       COMMAND dxc.exe /nologo /E${functionentry} /T${shadertype} ${SHADER_DEFINES} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fo ${CMAKE_BINARY_DIR}/${FILE_WE}.cso /Fh ${SHADER_HEADER_DIR}/${FILE_WE}.h /Fd ${CMAKE_BINARY_DIR}/${FILE_WE}.pdb ${FILE}
+                       COMMAND ${DXC_COMMAND} /nologo /E${functionentry} /T${shadertype} ${SHADER_DEFINES} $<IF:$<CONFIG:DEBUG>,/Od,/O3> /Zi /Fo ${CMAKE_BINARY_DIR}/${FILE_WE}.cso /Fh ${SHADER_HEADER_DIR}/${FILE_WE}.h /Fd ${CMAKE_BINARY_DIR}/${FILE_WE}.pdb ${FILE}
                        MAIN_DEPENDENCY ${FILE}
                        COMMENT "HLSL ${FILE}"
                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/shaders/
@@ -187,6 +193,8 @@ if(COMPILE_SHADERS)
           PRIVATE
           $<BUILD_INTERFACE:${SHADER_HEADER_DIR}>
   )
+elseif(COMPILE_SHADERS AND CMAKE_CROSSCOMPILING)
+  message(WARNING "Shader compilation disabled for cross-compilation. Compile shaders on Windows.")
 endif()
 
 

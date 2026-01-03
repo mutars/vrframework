@@ -3,7 +3,7 @@
 #include <utility/Scan.hpp>
 #include <utility/String.hpp>
 
-#include <SafetyHook.hpp>
+#include <safetyhook.hpp>
 
 #include "Framework.hpp"
 #include "Mods.hpp"
