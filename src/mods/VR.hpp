@@ -613,6 +613,8 @@ private:
     const ModSlider::Ptr m_ui_distance_option{ ModSlider::create(generate_name("2DUIDistance"), 0.01f, 100.0f, 1.0f) };
     const ModSlider::Ptr m_world_scale_option{ ModSlider::create(generate_name("WorldSpaceScale"), 0.5f, 2.0f, 1.0f) };
     const ModSlider::Ptr m_resolution_scale{ ModSlider::create(generate_name("OpenXRResolutionScale"), 0.1f, 5.0f, 1.0f) };
+    const ModSlider::Ptr m_horizontal_fov_scale{ ModSlider::create(generate_name("HorizontalFOVScale"), 0.0f, 1.0f, 1.0f) };
+    const ModSlider::Ptr m_vertical_fov_scale{ ModSlider::create(generate_name("VerticalFOVScale"), 0.0f, 1.0f, 1.0f) };
 
     const ModToggle::Ptr m_force_fps_settings{ ModToggle::create(generate_name("ForceFPS"), true) };
     const ModToggle::Ptr m_force_aa_settings{ ModToggle::create(generate_name("ForceAntiAliasing"), true) };
@@ -660,6 +662,8 @@ private:
         *m_world_scale_option,
 //        *m_allow_engine_overlays,
         *m_resolution_scale,
+        *m_horizontal_fov_scale,
+        *m_vertical_fov_scale,
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
         *m_sync_interval,

@@ -1154,6 +1154,15 @@ void VR::on_draw_ui() {
             m_openxr->resolution_scale = m_resolution_scale->value();
         }
         m_use_async_aer->draw("Use Async AER");
+
+        m_horizontal_fov_scale->draw("Horizontal FOV Scale");
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            get_runtime()->m_horizontal_fov_scale = m_horizontal_fov_scale->value();
+        }
+        m_vertical_fov_scale->draw("Vertical FOV Scale");
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            get_runtime()->m_vertical_fov_scale = m_vertical_fov_scale->value();
+        }
     }
 
 //    ImGui::Combo("Sync Mode", (int*)&get_runtime()->custom_stage, "Early\0Late\0Very Late\0");
@@ -1277,6 +1286,8 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
     }
     if(get_runtime()->loaded) {
         *(int*)&get_runtime()->custom_stage = m_sync_interval->value();
+        get_runtime()->m_horizontal_fov_scale = m_horizontal_fov_scale->value();
+        get_runtime()->m_vertical_fov_scale = m_vertical_fov_scale->value();
     }
     m_overlay_component.on_config_load(cfg, set_defaults);
 

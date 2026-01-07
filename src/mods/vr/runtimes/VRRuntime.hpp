@@ -152,6 +152,8 @@ struct VRRuntime {
     bool HORIZONTAL_MIRROR = false;
     bool VERTICAL_MATCHED = false;
     bool should_grow_rectangle_for_projection_cropping = true;
+    float m_horizontal_fov_scale = 1.f;
+    float m_vertical_fov_scale = 1.f;
 
     SynchronizeStage custom_stage{SynchronizeStage::EARLY};
 };

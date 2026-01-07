@@ -267,10 +267,13 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         auto& active_fov_l = pipelineState.active_fov[0];
         auto& active_fov_r = pipelineState.active_fov[1];
         if(HORIZONTAL_SYMMETRIC) {
-            active_fov_l.angleLeft = -std::max(std::max(-fov_l.angleLeft, fov_l.angleRight), std::max(-fov_r.angleLeft, fov_r.angleRight));
-            active_fov_l.angleRight = -active_fov_l.angleLeft;
-            active_fov_r.angleLeft = active_fov_l.angleLeft;
-            active_fov_r.angleRight = active_fov_l.angleRight;
+            const float min_h = std::min(std::min(-fov_l.angleLeft, fov_l.angleRight), std::min(-fov_r.angleLeft, fov_r.angleRight));
+            const float max_h = std::max(std::max(-fov_l.angleLeft, fov_l.angleRight), std::max(-fov_r.angleLeft, fov_r.angleRight));
+            const float scaled_h = std::lerp(min_h, max_h, m_horizontal_fov_scale);
+            active_fov_l.angleLeft = -scaled_h;
+            active_fov_l.angleRight = scaled_h;
+            active_fov_r.angleLeft = -scaled_h;
+            active_fov_r.angleRight = scaled_h;
         } else if (HORIZONTAL_MIRROR) {
             float max_outer = std::max(-fov_l.angleLeft, fov_r.angleRight);
             float max_inner = std::max(fov_l.angleRight, -fov_r.angleLeft);
@@ -286,10 +289,13 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         }
 
         if(VERTICAL_SYMMETRIC) {
-            active_fov_l.angleUp = std::max(std::max(fov_l.angleUp, -fov_l.angleDown), std::max(fov_r.angleUp, -fov_r.angleDown));
-            active_fov_l.angleDown = -active_fov_l.angleUp;
-            active_fov_r.angleUp = active_fov_l.angleUp;
-            active_fov_r.angleDown = active_fov_l.angleDown;
+            const float min_v = std::min(std::min(fov_l.angleUp, -fov_l.angleDown), std::min(fov_r.angleUp, -fov_r.angleDown));
+            const float max_v = std::max(std::max(fov_l.angleUp, -fov_l.angleDown), std::max(fov_r.angleUp, -fov_r.angleDown));
+            const float scaled_v = std::lerp(min_v, max_v, m_vertical_fov_scale);
+            active_fov_l.angleUp = scaled_v;
+            active_fov_l.angleDown = -scaled_v;
+            active_fov_r.angleUp = scaled_v;
+            active_fov_r.angleDown = -scaled_v;
         } else if (VERTICAL_MATCHED) {
             float max_top = std::max(fov_l.angleUp, fov_r.angleUp);
             float max_bottom = std::max(-fov_l.angleDown, -fov_r.angleDown);
@@ -1426,14 +1432,14 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
     
                 offset_y = (int32_t)(view_bounds[i][2] * (float)swapchain.height);
                 extent_y = (int32_t)(view_bounds[i][3] * (float)swapchain.height) - offset_y;
-                if(!DebugUtils::config.alternativeSymmetricProjection) {
-                    projection_layer_views[i].fov = current_pipeline->stage_views[i].fov;
-                    projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
-                    projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
-                } else {
+                if(m_horizontal_fov_scale < 1.0f || m_vertical_fov_scale < 1.0f) {
                     projection_layer_views[i].subImage.imageRect.offset = {0, 0};
                     projection_layer_views[i].subImage.imageRect.extent = {swapchain.width, swapchain.height};
                     projection_layer_views[i].fov = current_pipeline->active_fov[i];
+                } else {
+                    projection_layer_views[i].fov = current_pipeline->stage_views[i].fov;
+                    projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
+                    projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
                 }
 
             }
