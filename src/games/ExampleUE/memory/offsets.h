@@ -5,30 +5,43 @@
 
 namespace memory {
 
-// Game-specific pattern/offset definitions
-// These patterns need to be updated for each game version
+/**
+ * Game-specific pattern/offset definitions for ExampleUE
+ * 
+ * IMPORTANT: These byte patterns are fragile and may break with game updates.
+ * 
+ * Recommended approaches for production use:
+ * 1. Implement version detection to select patterns based on game version
+ * 2. Use multiple fallback patterns for each function
+ * 3. Consider using RTTI-based lookup when available (e.g., VTable method)
+ * 4. Store static offsets for known game versions as fallback
+ * 
+ * Pattern format uses '?' for wildcard bytes that may vary between versions.
+ * The FuncRelocation function will use signature scanning when SIGNATURE_SCAN
+ * is defined, otherwise falls back to the static offset parameter.
+ */
 
 inline uintptr_t beginFrameAddr() {
     // Pattern for UE BeginFrame function
-    // Example: "48 89 5C 24 ? 57 48 83 EC 20 48 8B D9 E8"
+    // This pattern targets the function prologue which is more stable
     return FuncRelocation("BeginFrame", "48 89 5C 24 ? 57 48 83 EC 20 48 8B D9 E8", 0x0);
 }
 
 inline uintptr_t beginRenderAddr() {
     // Pattern for UE BeginRender function
-    // Example: "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 30"
+    // Uses standard x64 calling convention prologue
     return FuncRelocation("BeginRender", "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 30", 0x0);
 }
 
 inline uintptr_t calcViewAddr() {
     // Pattern for APlayerCameraManager::CalcView
-    // Example: "40 53 48 83 EC 40 48 8B DA 48 8B D1"
+    // Alternative: Use VTable("APlayerCameraManager", offset) if RTTI available
     return FuncRelocation("CalcView", "40 53 48 83 EC 40 48 8B DA 48 8B D1", 0x0);
 }
 
 inline uintptr_t getProjectionAddr() {
     // Pattern for projection matrix calculation
-    // Example: "48 83 EC 48 0F 29 74 24 ?"
+    // Look for SSE register saves as they're common in matrix functions
     return FuncRelocation("GetProjection", "48 83 EC 48 0F 29 74 24 ?", 0x0);
 }
 

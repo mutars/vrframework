@@ -39,12 +39,13 @@ void ViewInjector::onSetViewports(ID3D12GraphicsCommandList5* cmd, UINT num, con
 void ViewInjector::onSetRenderTargets(ID3D12GraphicsCommandList5* cmd, UINT num,
     const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
     
-    if (!StereoEmulator::get().isStereoActive() || !m_atlasRT) {
+    if (!StereoEmulator::get().isStereoActive() || !m_atlasRT || !cmd) {
         return;
     }
     
-    // Redirect render targets to atlas RT
-    // The actual RT redirection is handled by the caller
+    // Redirect render targets to the foveated atlas RT
+    // This replaces the game's render targets with our atlas
+    cmd->OMSetRenderTargets(1, &m_atlasRTV, FALSE, dsv);
 }
 
 void ViewInjector::injectFovealPair(ID3D12GraphicsCommandList5* cmd) {

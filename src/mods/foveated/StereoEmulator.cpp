@@ -1,5 +1,6 @@
 #include "StereoEmulator.hpp"
 #include <cmath>
+#include <algorithm>
 
 namespace foveated {
 
@@ -134,9 +135,11 @@ void StereoEmulator::configureFOV(float fovealDeg, float peripheralDeg) {
     m_peripheralFov = peripheralDeg;
     
     // Update scales based on FOV ratio
-    if (peripheralDeg > 0.0f) {
+    // Guard against near-zero values that could cause extreme scale ratios
+    constexpr float MIN_FOV_DEG = 1.0f;
+    if (peripheralDeg >= MIN_FOV_DEG) {
         m_fovealScale = 1.0f;
-        m_peripheralScale = fovealDeg / peripheralDeg;
+        m_peripheralScale = std::clamp(fovealDeg / peripheralDeg, 0.1f, 1.0f);
     }
     
     // Update view fov scales

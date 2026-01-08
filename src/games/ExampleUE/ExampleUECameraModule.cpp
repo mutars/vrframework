@@ -26,14 +26,25 @@ void ExampleUECameraModule::onCalcView(sdk::APlayerCameraManager* camMgr, float 
     inst->m_calcViewHook.call<void>(camMgr, dt, outView);
     
     auto vr = VR::get();
-    if (vr->is_hmd_active()) {
-        // Get VR transforms
-        [[maybe_unused]] auto eye = vr->get_current_eye_transform();
-        [[maybe_unused]] auto hmd = vr->get_transform(0);
-        [[maybe_unused]] auto offset = vr->get_transform_offset();
+    if (vr->is_hmd_active() && outView != nullptr) {
+        // Get VR transforms for applying to camera view
+        auto eye = vr->get_current_eye_transform();
+        auto hmd = vr->get_transform(0);
+        auto offset = vr->get_transform_offset();
         
-        // Apply VR transform to outView->Location/Rotation
-        // This is game-specific and requires knowledge of the SDK structures
+        // TODO: Apply VR transform to outView->Location/Rotation
+        // This requires game-specific SDK structure knowledge:
+        // - Extract position from hmd matrix
+        // - Extract rotation from eye matrix
+        // - Apply offset compensation
+        // - Write to outView->Location and outView->Rotation
+        //
+        // Example implementation (requires actual SDK structures):
+        // glm::vec3 hmdPos = glm::vec3(hmd[3]);
+        // outView->Location = FVector(hmdPos.x, hmdPos.y, hmdPos.z);
+        (void)eye;
+        (void)hmd;
+        (void)offset;
     }
 }
 
