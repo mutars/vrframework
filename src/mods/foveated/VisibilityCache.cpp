@@ -23,8 +23,8 @@ void VisibilityCache::initialize(uint32_t maxPrimitives) {
 
 void VisibilityCache::beginFrame(int frameIdx) {
     std::unique_lock lock{m_mtx};
-    const auto wrapped = static_cast<uint32_t>(frameIdx);
-    m_current = static_cast<int>(wrapped % static_cast<uint32_t>(FRAMES));
+    const int frames = static_cast<int>(FRAMES);
+    m_current = ((frameIdx % frames) + frames) % frames;
     m_frames[m_current].valid.fill(false);
 }
 

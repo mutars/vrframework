@@ -2,7 +2,7 @@
 
 #include "memory/offsets.h"
 #include "aer/ConstantsPool.h"
-#include "sdk/ExampleUESDK.h"
+#include "sdk/ExampleUESDK.hpp"
 #include <mods/VR.hpp>
 
 ExampleUECameraModule* ExampleUECameraModule::get() {
