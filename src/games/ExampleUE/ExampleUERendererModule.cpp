@@ -3,6 +3,9 @@
 #include "mods/VR.hpp"
 #include "Framework.hpp"
 
+// Cached pointer to engine's frame counter (initialized during hook installation)
+static int* g_engineFrameCounterPtr = nullptr;
+
 void ExampleUERendererModule::installHooks() {
     auto beginFrameFn = memory::beginFrameAddr();
     if (beginFrameFn != 0) {
@@ -19,29 +22,43 @@ void ExampleUERendererModule::installHooks() {
             reinterpret_cast<void*>(&onBeginRender)
         );
     }
+    
+    // Cache pointer to engine's frame counter for direct access
+    auto frameCounterAddr = memory::engineFrameCounterAddr();
+    if (frameCounterAddr != 0) {
+        g_engineFrameCounterPtr = reinterpret_cast<int*>(frameCounterAddr);
+    }
 }
 
 uintptr_t ExampleUERendererModule::onBeginFrame() {
     auto inst = get();
+    
+    // Cache the engine frame count before the frame begins
+    // This reads directly from the engine's GFrameNumber or equivalent
+    if (g_engineFrameCounterPtr != nullptr) {
+        inst->cacheEngineFrameCount(*g_engineFrameCounterPtr);
+    }
+    
     return inst->m_beginFrameHook.call<uintptr_t>();
 }
 
 uintptr_t ExampleUERendererModule::onBeginRender(void* ctx) {
     auto inst = get();
     
+    // Call the original function first to let the engine update its frame state
+    auto result = inst->m_beginRenderHook.call<uintptr_t>(ctx);
+    
     if (g_framework->is_ready()) {
         auto vr = VR::get();
-        vr->m_engine_frame_count++;
+        
+        // Use the engine's frame count directly - avoids sync issues
+        int engineFrame = inst->getEngineFrameCount();
+        
         g_framework->enable_engine_thread();
         g_framework->run_imgui_frame(false);
-        vr->m_render_frame_count = vr->m_engine_frame_count;
-        vr->on_begin_rendering(vr->m_render_frame_count);
-        vr->update_hmd_state(vr->m_render_frame_count);
-        
-        auto result = inst->m_beginRenderHook.call<uintptr_t>(ctx);
-        vr->m_presenter_frame_count = vr->m_render_frame_count;
-        return result;
+        vr->on_begin_rendering(engineFrame);
+        vr->update_hmd_state(engineFrame);
     }
     
-    return inst->m_beginRenderHook.call<uintptr_t>(ctx);
+    return result;
 }

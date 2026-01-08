@@ -9,6 +9,11 @@ bool FoveatedAtlas::initialize(ID3D12Device* dev, const AtlasConfig& cfg) {
         return false;
     }
     
+    if (cfg.baseWidth == 0 || cfg.baseHeight == 0) {
+        spdlog::error("[FoveatedAtlas] Invalid base dimensions from VR runtime");
+        return false;
+    }
+    
     m_cfg = cfg;
     
     // Create RTV descriptor heap
@@ -35,7 +40,9 @@ bool FoveatedAtlas::initialize(ID3D12Device* dev, const AtlasConfig& cfg) {
         return false;
     }
     
-    // Create atlas render target (double-height for 4-view layout)
+    // Create atlas render target
+    // Layout: 2 columns (L/R eyes) x 2 rows (Foveal/Peripheral)
+    // All 4 views have same dimensions based on VR size * scale percentages
     D3D12_RESOURCE_DESC rtDesc{};
     rtDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     rtDesc.Alignment = 0;
@@ -116,10 +123,10 @@ bool FoveatedAtlas::initialize(ID3D12Device* dev, const AtlasConfig& cfg) {
     
     m_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
     
-    spdlog::info("[FoveatedAtlas] Initialized atlas {}x{} (foveal: {}x{}, peripheral: {}x{})",
+    spdlog::info("[FoveatedAtlas] Initialized atlas {}x{} (eye: {}x{}, scale: {:.0f}%x{:.0f}%)",
         getTotalWidth(), getTotalHeight(),
-        cfg.fovealWidth, cfg.fovealHeight,
-        cfg.peripheralWidth, cfg.peripheralHeight);
+        getEyeWidth(), getEyeHeight(),
+        cfg.horizontalScale * 100.0f, cfg.verticalScale * 100.0f);
     
     return true;
 }

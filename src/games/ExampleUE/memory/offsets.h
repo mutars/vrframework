@@ -45,4 +45,18 @@ inline uintptr_t getProjectionAddr() {
     return FuncRelocation("GetProjection", "48 83 EC 48 0F 29 74 24 ?", 0x0);
 }
 
+/**
+ * Engine frame counter address (GFrameNumber or similar)
+ * Reading directly from the engine's frame counter ensures proper synchronization
+ * and eliminates frame lag issues compared to manually incrementing.
+ * 
+ * For UE4/UE5: Look for GFrameNumber global variable
+ * Pattern typically references the frame counter increment location
+ */
+inline uintptr_t engineFrameCounterAddr() {
+    // Pattern that references GFrameNumber - adjust for specific game
+    // This is typically found near frame begin/end logic
+    return InstructionRelocation("EngineFrameCounter", "8B 05 ? ? ? ? 89 05 ? ? ? ?", 2, 6, 0x0);
+}
+
 } // namespace memory

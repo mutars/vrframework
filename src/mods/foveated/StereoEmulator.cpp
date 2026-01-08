@@ -110,22 +110,24 @@ void StereoEmulator::computeFrustumPlanes(EmulatedView& v) {
 std::array<D3D12_VIEWPORT, 4> StereoEmulator::computeAtlasViewports(uint32_t w, uint32_t h) const {
     std::array<D3D12_VIEWPORT, 4> viewports{};
     
-    // Atlas layout: [FovealL|FovealR] top, [PeriphL|PeriphR] bottom
-    float halfWidth = static_cast<float>(w) / 2.0f;
-    float fovealHeight = static_cast<float>(h) * 0.6f; // 60% for foveal
-    float peripheralHeight = static_cast<float>(h) * 0.4f; // 40% for peripheral
+    // Atlas layout: 2x2 grid with equal-sized views
+    // [FovealL  | FovealR  ] top row
+    // [PeriphL  | PeriphR  ] bottom row
+    // All 4 views have identical dimensions (w/2 x h/2)
+    float eyeWidth = static_cast<float>(w) / 2.0f;
+    float eyeHeight = static_cast<float>(h) / 2.0f;
     
     // Foveal Left (top-left)
-    viewports[0] = {0.0f, 0.0f, halfWidth, fovealHeight, 0.0f, 1.0f};
+    viewports[0] = {0.0f, 0.0f, eyeWidth, eyeHeight, 0.0f, 1.0f};
     
     // Foveal Right (top-right)
-    viewports[1] = {halfWidth, 0.0f, halfWidth, fovealHeight, 0.0f, 1.0f};
+    viewports[1] = {eyeWidth, 0.0f, eyeWidth, eyeHeight, 0.0f, 1.0f};
     
     // Peripheral Left (bottom-left)
-    viewports[2] = {0.0f, fovealHeight, halfWidth, peripheralHeight, 0.0f, 1.0f};
+    viewports[2] = {0.0f, eyeHeight, eyeWidth, eyeHeight, 0.0f, 1.0f};
     
     // Peripheral Right (bottom-right)
-    viewports[3] = {halfWidth, fovealHeight, halfWidth, peripheralHeight, 0.0f, 1.0f};
+    viewports[3] = {eyeWidth, eyeHeight, eyeWidth, eyeHeight, 0.0f, 1.0f};
     
     return viewports;
 }
