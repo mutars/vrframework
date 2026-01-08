@@ -2,9 +2,11 @@
 #include "memory/offsets.h"
 #include "mods/VR.hpp"
 #include "Framework.hpp"
+#include <atomic>
 
 // Cached pointer to engine's frame counter (initialized during hook installation)
-static int* g_engineFrameCounterPtr = nullptr;
+// Using atomic for thread-safe access
+static std::atomic<int*> g_engineFrameCounterPtr{nullptr};
 
 void ExampleUERendererModule::installHooks() {
     auto beginFrameFn = memory::beginFrameAddr();
@@ -26,7 +28,7 @@ void ExampleUERendererModule::installHooks() {
     // Cache pointer to engine's frame counter for direct access
     auto frameCounterAddr = memory::engineFrameCounterAddr();
     if (frameCounterAddr != 0) {
-        g_engineFrameCounterPtr = reinterpret_cast<int*>(frameCounterAddr);
+        g_engineFrameCounterPtr.store(reinterpret_cast<int*>(frameCounterAddr));
     }
 }
 
@@ -35,8 +37,12 @@ uintptr_t ExampleUERendererModule::onBeginFrame() {
     
     // Cache the engine frame count before the frame begins
     // This reads directly from the engine's GFrameNumber or equivalent
-    if (g_engineFrameCounterPtr != nullptr) {
-        inst->cacheEngineFrameCount(*g_engineFrameCounterPtr);
+    int* framePtr = g_engineFrameCounterPtr.load();
+    if (framePtr != nullptr) {
+        // Validate pointer is within expected memory range before dereferencing
+        if (reinterpret_cast<uintptr_t>(framePtr) > 0x10000) {
+            inst->cacheEngineFrameCount(*framePtr);
+        }
     }
     
     return inst->m_beginFrameHook.call<uintptr_t>();

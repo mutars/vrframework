@@ -123,7 +123,7 @@ bool FoveatedAtlas::initialize(ID3D12Device* dev, const AtlasConfig& cfg) {
     
     m_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
     
-    spdlog::info("[FoveatedAtlas] Initialized atlas {}x{} (eye: {}x{}, scale: {:.0f}%x{:.0f}%)",
+    spdlog::info("[FoveatedAtlas] Initialized atlas {}x{} (eye: {}x{}, scale: {:.0f}% H, {:.0f}% V)",
         getTotalWidth(), getTotalHeight(),
         getEyeWidth(), getEyeHeight(),
         cfg.horizontalScale * 100.0f, cfg.verticalScale * 100.0f);
