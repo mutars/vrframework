@@ -5,8 +5,8 @@
 #include <mods/VR.hpp>
 
 ExampleUERendererModule* ExampleUERendererModule::get() {
-    static auto inst = new ExampleUERendererModule();
-    return inst;
+    static ExampleUERendererModule inst;
+    return &inst;
 }
 
 void ExampleUERendererModule::installHooks() {

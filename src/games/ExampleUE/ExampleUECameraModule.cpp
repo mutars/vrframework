@@ -6,8 +6,8 @@
 #include <mods/VR.hpp>
 
 ExampleUECameraModule* ExampleUECameraModule::get() {
-    static auto inst = new ExampleUECameraModule();
-    return inst;
+    static ExampleUECameraModule inst;
+    return &inst;
 }
 
 void ExampleUECameraModule::installHooks() {

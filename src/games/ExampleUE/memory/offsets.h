@@ -5,10 +5,10 @@
 namespace memory {
     // Placeholder ExampleUE signatures; replace with game-specific patterns/offsets when integrating.
     inline uintptr_t beginFrameAddr() {
-        return FuncRelocation("BeginFrame", "48 89 5C 24 ?  57 48 83 EC 20 48 8B D9 E8", 0x0);
+        return FuncRelocation("BeginFrame", "48 89 5C 24 ? 57 48 83 EC 20 48 8B D9 E8", 0x0);
     }
     inline uintptr_t beginRenderAddr() {
-        return FuncRelocation("BeginRender", "48 89 5C 24 ?  48 89 74 24 ?  57 48 83 EC 30", 0x0);
+        return FuncRelocation("BeginRender", "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 30", 0x0);
     }
     inline uintptr_t calcViewAddr() {
         return FuncRelocation("CalcView", "40 53 48 83 EC 40 48 8B DA 48 8B D1", 0x0);
