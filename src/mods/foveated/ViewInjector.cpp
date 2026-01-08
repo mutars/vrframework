@@ -20,13 +20,13 @@ void ViewInjector::install(D3D12Hook* hook) {
     // Register callbacks with D3D12Hook
     m_hook->on_set_viewports([this](D3D12Hook& hook, ID3D12GraphicsCommandList5* cmd, 
                                      UINT num, const D3D12_VIEWPORT* vps) {
-        this->onSetViewports(cmd, num, vps);
+        onSetViewports(cmd, num, vps);
     });
     
     m_hook->on_set_render_targets([this](D3D12Hook& hook, ID3D12GraphicsCommandList5* cmd,
                                           UINT num, const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs,
                                           BOOL single, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
-        this->onSetRenderTargets(cmd, num, rtvs, single, dsv);
+        onSetRenderTargets(cmd, num, rtvs, single, dsv);
     });
     
     spdlog::info("ViewInjector installed hooks");

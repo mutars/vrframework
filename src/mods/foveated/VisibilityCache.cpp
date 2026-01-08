@@ -92,13 +92,26 @@ bool VisibilityCache::canShare(uint32_t src, uint32_t dst) const {
 }
 
 void VisibilityCache::copyVisibility(uint32_t src, uint32_t dst) {
-    if (src >= VIEWS || dst >= VIEWS || !canShare(src, dst)) {
+    if (src >= VIEWS || dst >= VIEWS) {
+        return;
+    }
+    
+    // Can share visibility between foveal and peripheral views of the same eye
+    // 0 (Foveal Left) -> 2 (Peripheral Left)
+    // 1 (Foveal Right) -> 3 (Peripheral Right)
+    if ((src != 0 || dst != 2) && (src != 1 || dst != 3)) {
         return;
     }
     
     std::unique_lock lock(m_mtx);
     
     auto& currentFrame = m_frames[m_current];
+    
+    // Check validity while holding the lock
+    if (!currentFrame.valid[src]) {
+        return;
+    }
+    
     const auto& srcMask = currentFrame.masks[src];
     auto& dstMask = currentFrame.masks[dst];
     
