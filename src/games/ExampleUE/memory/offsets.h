@@ -28,4 +28,12 @@ namespace memory {
         // Pattern: "48 83 EC 48 0F 29 74 24 ?"
         return FuncRelocation("GetProjection", "48 83 EC 48 0F 29 74 24 ?", 0x0);
     }
+    
+    inline uintptr_t getGFrameNumberAddr() {
+        // Example signature scan for GFrameNumber global variable in Unreal Engine
+        // This would typically be found via pattern scanning for the global variable
+        // Pattern would be game/engine version specific
+        // Example: "48 8B 05 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 08"
+        return FuncRelocation("GFrameNumber", "48 8B 05 ?? ?? ?? ?? 48 85 C0", 0x0);
+    }
 }

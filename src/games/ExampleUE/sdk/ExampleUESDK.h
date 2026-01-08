@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <cstdint>
 
 // Example SDK structures for Unreal Engine
 // These would typically be generated from UE4SS dumps or manual reverse engineering
@@ -37,5 +38,9 @@ struct APlayerCameraManager {
     // For demonstration purposes, we're keeping it minimal
     char _pad[0x100];
 };
+
+// Global frame counter - would be found via pattern scanning in a real implementation
+// In Unreal Engine, this is typically GFrameNumber or GFrameCounter
+extern uint64_t* GFrameNumber;
 
 } // namespace sdk
