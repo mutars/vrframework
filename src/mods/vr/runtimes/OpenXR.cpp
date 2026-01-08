@@ -269,7 +269,7 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         if(HORIZONTAL_SYMMETRIC) {
             const float min_h = std::min(std::min(-fov_l.angleLeft, fov_l.angleRight), std::min(-fov_r.angleLeft, fov_r.angleRight));
             const float max_h = std::max(std::max(-fov_l.angleLeft, fov_l.angleRight), std::max(-fov_r.angleLeft, fov_r.angleRight));
-            const float scaled_h = std::lerp(min_h, max_h, m_horizontal_fov_scale);
+            const float scaled_h = std::lerp(min_h/2.f, max_h, m_horizontal_fov_scale);
             active_fov_l.angleLeft = -scaled_h;
             active_fov_l.angleRight = scaled_h;
             active_fov_r.angleLeft = -scaled_h;
@@ -291,7 +291,7 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         if(VERTICAL_SYMMETRIC) {
             const float min_v = std::min(std::min(fov_l.angleUp, -fov_l.angleDown), std::min(fov_r.angleUp, -fov_r.angleDown));
             const float max_v = std::max(std::max(fov_l.angleUp, -fov_l.angleDown), std::max(fov_r.angleUp, -fov_r.angleDown));
-            const float scaled_v = std::lerp(min_v, max_v, m_vertical_fov_scale);
+            const float scaled_v = std::lerp(min_v/2.f, max_v, m_vertical_fov_scale);
             active_fov_l.angleUp = scaled_v;
             active_fov_l.angleDown = -scaled_v;
             active_fov_r.angleUp = scaled_v;
