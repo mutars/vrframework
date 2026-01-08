@@ -2,6 +2,7 @@
 
 #include "ExampleUECameraModule.h"
 #include "ExampleUERendererModule.h"
+#include <imgui.h>
 
 std::optional<std::string> ExampleUEEntry::on_initialize() {
     ExampleUERendererModule::get()->installHooks();
