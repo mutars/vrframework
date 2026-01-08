@@ -18,11 +18,11 @@ void ViewInjector::install(D3D12Hook* hook) {
     }
     m_hook = hook;
 
-    hook->on_set_viewports([this](D3D12Hook&, ID3D12GraphicsCommandList5* cmd, UINT num, const D3D12_VIEWPORT* vps) {
+    hook->on_set_viewports([this]([[maybe_unused]] D3D12Hook& hookRef, ID3D12GraphicsCommandList5* cmd, UINT num, const D3D12_VIEWPORT* vps) {
         onSetViewports(cmd, num, vps);
     });
 
-    hook->on_set_render_targets([this](D3D12Hook&, ID3D12GraphicsCommandList5* cmd, UINT num,
+    hook->on_set_render_targets([this]([[maybe_unused]] D3D12Hook& hookRef, ID3D12GraphicsCommandList5* cmd, UINT num,
                                        const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, BOOL single, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
         onSetRenderTargets(cmd, num, rtvs, single, dsv);
     });

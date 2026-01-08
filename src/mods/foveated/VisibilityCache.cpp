@@ -32,6 +32,9 @@ void VisibilityCache::recordVisibility(uint32_t viewIdx, const uint8_t* bits, si
     if (viewIdx >= VIEWS) {
         return;
     }
+    if (bits == nullptr || count == 0) {
+        return;
+    }
     std::unique_lock lock{m_mtx};
     auto& frame = m_frames[m_current];
     auto& mask = frame.masks[viewIdx];
