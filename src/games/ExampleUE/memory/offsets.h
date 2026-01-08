@@ -3,6 +3,7 @@
 #include "memory/memory_mul.h"
 
 namespace memory {
+    // Placeholder ExampleUE signatures; replace with game-specific patterns/offsets when integrating.
     inline uintptr_t beginFrameAddr() {
         return FuncRelocation("BeginFrame", "48 89 5C 24 ?  57 48 83 EC 20 48 8B D9 E8", 0x0);
     }

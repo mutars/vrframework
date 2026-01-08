@@ -58,8 +58,7 @@ bool FoveatedAtlas::initialize(ID3D12Device* dev, const AtlasConfig& cfg) {
     D3D12_DESCRIPTOR_HEAP_DESC dsvDesc{};
     dsvDesc.NumDescriptors = 1;
     dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-    dev->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&m_dsvHeap));
-    if (m_dsvHeap) {
+    if (SUCCEEDED(dev->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&m_dsvHeap)))) {
         D3D12_RESOURCE_DESC depthDesc = texDesc;
         depthDesc.Format = DXGI_FORMAT_D32_FLOAT;
         depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
