@@ -23,6 +23,10 @@ void ExampleUERendererModule::installHooks() {
 
 uintptr_t ExampleUERendererModule::onBeginFrame() {
     auto inst = get();
+    if (g_framework && g_framework->is_ready()) {
+        auto vr = VR::get();
+        vr->m_engine_frame_count++;
+    }
     return inst->m_beginFrameHook.call<uintptr_t>();
 }
 
@@ -30,7 +34,6 @@ uintptr_t ExampleUERendererModule::onBeginRender(void* ctx) {
     auto inst = get();
     if (g_framework && g_framework->is_ready()) {
         auto vr = VR::get();
-        vr->m_engine_frame_count++;
         g_framework->enable_engine_thread();
         g_framework->run_imgui_frame(false);
         vr->m_render_frame_count = vr->m_engine_frame_count;
