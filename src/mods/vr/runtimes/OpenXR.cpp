@@ -1415,7 +1415,7 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
 
     if (current_pipeline->frame_state.shouldRender == XR_TRUE) {
         projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
-        if (!ModSettings::g_internalSettings.showQuadDisplay) {
+        if (!ModSettings::showFlatScreenDisplay()) {
             for (auto i = 0; i < projection_layer_views.size(); ++i) {
                 const auto& swapchain = this->swapchains[i];
                 int         actual_frame = i == 0 ? l_frame : r_frame;

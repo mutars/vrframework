@@ -1153,26 +1153,6 @@ void Framework::draw_ui() {
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // causes bugs with the cursor
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-    static bool menu_button_was_pressed = false;
-    static std::chrono::steady_clock::time_point menu_button_press_start{};
-    const bool menu_button_pressed = ImGui::IsKeyDown(ImGuiKey_GamepadStart);
-    constexpr auto long_press_duration = std::chrono::seconds(2);
-
-    if (menu_button_pressed) {
-        if (!menu_button_was_pressed) {
-            menu_button_press_start = std::chrono::steady_clock::now();
-            menu_button_was_pressed = true;
-        } else {
-            auto elapsed = std::chrono::steady_clock::now() - menu_button_press_start;
-            if (elapsed >= long_press_duration) {
-                m_draw_ui = !m_draw_ui;
-                menu_button_press_start = std::chrono::steady_clock::now();
-            }
-        }
-    } else {
-        menu_button_was_pressed = false;
-    }
-
     if (!m_draw_ui) {
         // remove SetCursorPos patch
         if (!VRConfig::get()->is_always_show_cursor()) {
