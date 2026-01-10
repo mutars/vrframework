@@ -740,6 +740,7 @@ void VR::recenter_view() {
     auto current_hmd_state = get_transform(0);
     auto new_rotation_offset = glm::mat4_cast(glm::normalize(utility::math::flatten(glm::quat{get_rotation(0)})));
     new_rotation_offset[3] = current_hmd_state[3];
+    get_runtime()->recenter_view(new_rotation_offset);
     set_transform_offset(glm::inverse(new_rotation_offset));
 }
 
@@ -1155,6 +1156,12 @@ void VR::on_draw_ui() {
         }
         m_use_async_aer->draw("Use Async AER");
 
+        m_flat_screen_distance->draw("Flat Screen Distance");
+        if (ImGui::IsItemDeactivatedAfterEdit())
+        {
+            get_runtime()->m_flat_screen_distance = m_flat_screen_distance->value();
+        }
+
         m_horizontal_fov_scale->draw("Horizontal FOV Scale");
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             get_runtime()->m_horizontal_fov_scale = m_horizontal_fov_scale->value();
@@ -1162,6 +1169,10 @@ void VR::on_draw_ui() {
         m_vertical_fov_scale->draw("Vertical FOV Scale");
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             get_runtime()->m_vertical_fov_scale = m_vertical_fov_scale->value();
+        }
+        if (m_extended_fov_rage->draw("Extended FOV Scale Range"))
+        {
+            get_runtime()->m_extended_fov_range = m_extended_fov_rage->value();
         }
     }
 
@@ -1288,6 +1299,8 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
         *(int*)&get_runtime()->custom_stage = m_sync_interval->value();
         get_runtime()->m_horizontal_fov_scale = m_horizontal_fov_scale->value();
         get_runtime()->m_vertical_fov_scale = m_vertical_fov_scale->value();
+        get_runtime()->m_extended_fov_range = m_extended_fov_rage->value();
+        get_runtime()->m_flat_screen_distance = m_flat_screen_distance->value();
     }
     m_overlay_component.on_config_load(cfg, set_defaults);
 

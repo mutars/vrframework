@@ -267,9 +267,10 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         auto& active_fov_l = pipelineState.active_fov[0];
         auto& active_fov_r = pipelineState.active_fov[1];
         if(HORIZONTAL_SYMMETRIC) {
-            const float min_h = std::min(std::min(-fov_l.angleLeft, fov_l.angleRight), std::min(-fov_r.angleLeft, fov_r.angleRight));
+            float min_h = std::min(std::min(-fov_l.angleLeft, fov_l.angleRight), std::min(-fov_r.angleLeft, fov_r.angleRight));
+            min_h *= m_extended_fov_range ? .9f : 1.f;
             const float max_h = std::max(std::max(-fov_l.angleLeft, fov_l.angleRight), std::max(-fov_r.angleLeft, fov_r.angleRight));
-            const float scaled_h = std::lerp(min_h/2.f, max_h, m_horizontal_fov_scale);
+            const float scaled_h = std::lerp(min_h, max_h, m_horizontal_fov_scale);
             active_fov_l.angleLeft = -scaled_h;
             active_fov_l.angleRight = scaled_h;
             active_fov_r.angleLeft = -scaled_h;
@@ -289,9 +290,10 @@ VRRuntime::Error OpenXR::update_matrices(float nearz, float farz) {
         }
 
         if(VERTICAL_SYMMETRIC) {
-            const float min_v = std::min(std::min(fov_l.angleUp, -fov_l.angleDown), std::min(fov_r.angleUp, -fov_r.angleDown));
+            float min_v = std::min(std::min(fov_l.angleUp, -fov_l.angleDown), std::min(fov_r.angleUp, -fov_r.angleDown));
+            min_v *= m_extended_fov_range ? .9f : 1.f;
             const float max_v = std::max(std::max(fov_l.angleUp, -fov_l.angleDown), std::max(fov_r.angleUp, -fov_r.angleDown));
-            const float scaled_v = std::lerp(min_v/2.f, max_v, m_vertical_fov_scale);
+            float scaled_v = std::lerp(min_v, max_v, m_vertical_fov_scale);
             active_fov_l.angleUp = scaled_v;
             active_fov_l.angleDown = -scaled_v;
             active_fov_r.angleUp = scaled_v;
@@ -1465,13 +1467,16 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 l_quad_layers[i].subImage.swapchain = swapchain.handle;
                 l_quad_layers[i].subImage.imageRect.offset = {0, 0};
                 l_quad_layers[i].subImage.imageRect.extent = {(int32_t)swapchain.width, (int32_t)swapchain.height};
-                
-                // Set pose relative to view
-                l_quad_layers[i].pose.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
-                l_quad_layers[i].pose.position = current_pipeline->stage_views[i].pose.position;
-                // Move 2m forward from eye position
-                l_quad_layers[i].pose.position.z -= ModSettings::g_internalSettings.quadDisplayDistance;
-                
+
+                {
+                    auto flat_screen = glm::mat4(1.0f);
+                    flat_screen[3][2] = -m_flat_screen_distance;
+                    flat_screen = m_center_stage * flat_screen;
+                    auto rotation = glm::normalize(glm::quat_cast(flat_screen));
+                    l_quad_layers[i].pose.orientation = to_openxr(rotation);
+                    l_quad_layers[i].pose.position = {flat_screen[3][0], flat_screen[3][1], flat_screen[3][2]};
+                }
+
                 // Set size (2m wide, maintain aspect ratio)
                 float aspect_ratio = (float)swapchain.width / (float)swapchain.height;
                 l_quad_layers[i].size = {2.0f, 2.0f / aspect_ratio};

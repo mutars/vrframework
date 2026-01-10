@@ -8,7 +8,6 @@ namespace ModSettings
         bool      cameraShake{ false };
         bool      showQuadDisplay{ false };
         bool      forceFlatScreen{false};
-        float     quadDisplayDistance{ 2.0 };
         int       toneMapAlg{ 0 }; // None, Saturate, Reinhard, ACESFilmic
         float     toneMapExposure{ 0.0f };
     };

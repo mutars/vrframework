@@ -615,6 +615,8 @@ private:
     const ModSlider::Ptr m_resolution_scale{ ModSlider::create(generate_name("OpenXRResolutionScale"), 0.1f, 5.0f, 1.0f) };
     const ModSlider::Ptr m_horizontal_fov_scale{ ModSlider::create(generate_name("HorizontalFOVScale"), 0.0f, 1.0f, 1.0f) };
     const ModSlider::Ptr m_vertical_fov_scale{ ModSlider::create(generate_name("VerticalFOVScale"), 0.0f, 1.0f, 1.0f) };
+    const ModToggle::Ptr m_extended_fov_rage{ ModToggle::create(generate_name("ExtendedScaleFovRange"), false) };
+    const ModSlider::Ptr m_flat_screen_distance{ ModSlider::create(generate_name("FlatSCreenDistance"), 0.0f, 2.0f, 1.5f) };
 
     const ModToggle::Ptr m_force_fps_settings{ ModToggle::create(generate_name("ForceFPS"), true) };
     const ModToggle::Ptr m_force_aa_settings{ ModToggle::create(generate_name("ForceAntiAliasing"), true) };
@@ -664,6 +666,7 @@ private:
         *m_resolution_scale,
         *m_horizontal_fov_scale,
         *m_vertical_fov_scale,
+        *m_extended_fov_rage,
         *m_desktop_fix,
         *m_desktop_fix_skip_present,
         *m_sync_interval,

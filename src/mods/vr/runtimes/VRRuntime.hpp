@@ -106,6 +106,11 @@ struct VRRuntime {
         return false;
     }
 
+    virtual void recenter_view(const glm::mat4& view)
+    {
+        m_center_stage = view;
+    }
+
     bool is_openxr() const {
         return this->type() == Type::OPENXR;
     }
@@ -154,6 +159,9 @@ struct VRRuntime {
     bool should_grow_rectangle_for_projection_cropping = true;
     float m_horizontal_fov_scale = 1.f;
     float m_vertical_fov_scale = 1.f;
+    bool m_extended_fov_range = false;
+    Matrix4x4f m_center_stage = Matrix4x4f{1.0f};
+    float m_flat_screen_distance = 1.5f;
 
     SynchronizeStage custom_stage{SynchronizeStage::EARLY};
 };
