@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <openvr.h>
+#include <aer/ConstantsPool.h>
 
 #include "../VR.hpp"
 
@@ -301,9 +302,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         }
 
         if (runtime->is_openvr()) {
-            vr::Texture_t left_eye{(void*)m_left_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+            vr::VRTextureWithPose_t left_eye{};
+            left_eye.handle = (void*)m_left_eye_tex.Get();
+            left_eye.eType = vr::TextureType_DirectX;
+            left_eye.eColorSpace = vr::ColorSpace_Auto;
+            left_eye.mDeviceToAbsoluteTracking = GlobalPool::get_openvr_pose(vr->m_presenter_frame_count);
 
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &vr->m_left_bounds);
+            auto e = vr::VRCompositor()->Submit(vr::Eye_Left, (vr::Texture_t*)&left_eye, &vr->m_left_bounds, vr::Submit_TextureWithPose);
 
             bool submitted = true;
 
@@ -390,9 +395,13 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
                 context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
             }
             
-            vr::Texture_t right_eye{(void*)m_right_eye_tex.Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+            vr::VRTextureWithPose_t right_eye{};
+            right_eye.handle = (void*)m_right_eye_tex.Get();
+            right_eye.eType = vr::TextureType_DirectX;
+            right_eye.eColorSpace = vr::ColorSpace_Auto;
+            right_eye.mDeviceToAbsoluteTracking = GlobalPool::get_openvr_pose(vr->m_presenter_frame_count);
 
-            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, &right_eye, &vr->m_right_bounds);
+            auto e = vr::VRCompositor()->Submit(vr::Eye_Right, (vr::Texture_t*)&right_eye, &vr->m_right_bounds, vr::Submit_TextureWithPose);
 
             bool submitted = true;
 

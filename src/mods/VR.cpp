@@ -624,6 +624,11 @@ void VR::update_hmd_state(int frame) {
         GlobalPool::submit_openxr_fov(pipeline_state.active_fov[frame % 2], frame);
     }
 
+    if(runtime->is_openvr()) {
+        const auto& hmd_pose = m_openvr->render_poses[vr::k_unTrackedDeviceIndex_Hmd];
+        GlobalPool::submit_openvr_pose(hmd_pose.mDeviceToAbsoluteTracking, frame);
+    }
+
     runtime->got_first_poses = true;
 }
 
