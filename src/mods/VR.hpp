@@ -136,7 +136,7 @@ public:
 //    int32_t get_game_frame_count() const;
 
     bool is_using_async_aer() const {
-        return m_use_async_aer->value() && m_runtime->async_aer;
+        return m_runtime->async_aer;
     }
 
     bool is_gui_enabled() const {
