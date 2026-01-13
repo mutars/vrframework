@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/ext/matrix_float4x4.hpp>
 #include <openxr/openxr.h>
+#include <openvr.h>
 
 namespace GlobalPool
 {
@@ -15,6 +16,10 @@ namespace GlobalPool
             XrPosef pose{};
             XrFovf  fov{};
         } openxr;
+
+        struct OpenVR {
+            vr::HmdMatrix34_t pose{};
+        } openvr;
     };
 
     extern Constants g_constants[CONSTANTS_HISTORY_SIZE];
@@ -69,6 +74,14 @@ namespace GlobalPool
 
     inline const auto& get_xr_constants(int frame) {
         return g_constants[frame % CONSTANTS_HISTORY_SIZE].openxr;
+    }
+
+    inline void submit_openvr_pose(const vr::HmdMatrix34_t& pose, int frame) {
+        g_constants[frame % CONSTANTS_HISTORY_SIZE].openvr.pose = pose;
+    }
+
+    inline const auto& get_openvr_pose(int frame) {
+        return g_constants[frame % CONSTANTS_HISTORY_SIZE].openvr.pose;
     }
 
 //    XrPosef calculate_xr_pose_compensation(int reference_frame, int current_frame);
