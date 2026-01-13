@@ -132,6 +132,7 @@ struct VRRuntime {
     bool got_first_sync{false};
     bool handle_pause{false};
     bool wants_reset_origin{true};
+    bool async_aer{true};  // Alternate Frame Rendering - submit both eyes each present with historical poses
 
     std::optional<std::string> error{};
 
