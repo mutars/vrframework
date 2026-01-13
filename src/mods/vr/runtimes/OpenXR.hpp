@@ -176,7 +176,6 @@ public:
     bool session_ready{false};
     bool frame_began{false};
     bool frame_synced{false};
-    bool async_aer{true};
 #ifdef DEBUG_PROFILING_ENABLED
     bool profile_calls{true};
 #else
