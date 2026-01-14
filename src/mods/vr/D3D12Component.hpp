@@ -58,15 +58,15 @@ private:
 
     // Mimicking what OpenXR does.
     struct OpenVR {
-        d3d12::TextureContext& get_left() {
-            auto& ctx = this->left_eye_tex[this->texture_counter % left_eye_tex.size()];
-
+        d3d12::TextureContext& get_left(const bool past = false) {
+            const auto counter = past ? (this->texture_counter - 1) : this->texture_counter;
+            auto& ctx = this->left_eye_tex[counter % left_eye_tex.size()];
             return ctx;
         }
 
-        d3d12::TextureContext& get_right() {
-            auto& ctx = this->right_eye_tex[this->texture_counter % right_eye_tex.size()];
-
+        d3d12::TextureContext& get_right(const bool past = false) {
+            const auto counter = past ? (this->texture_counter - 1) : this->texture_counter;
+            auto& ctx = this->right_eye_tex[counter % right_eye_tex.size()];
             return ctx;
         }
 

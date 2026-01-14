@@ -117,6 +117,29 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                 spdlog::error("[VR] VRCompositor failed to submit left eye: {}", (int)e);
                 return e;
             }
+
+            if (vr->is_using_async_aer()) {
+                vr::D3D12TextureData_t right_tex {
+                    m_openvr.get_right(true).texture.Get(),
+                    command_queue,
+                    0
+                };
+
+                vr::VRTextureWithPose_t right_eye{};
+                right_eye.handle = (void*)&right_tex;
+                right_eye.eType = vr::TextureType_DirectX12;
+                right_eye.eColorSpace = vr::ColorSpace_Auto;
+                right_eye.mDeviceToAbsoluteTracking = GlobalPool::get_openvr_pose(vr->m_presenter_frame_count-1);
+
+                const auto right_bounds = vr::VRTextureBounds_t{runtime->view_bounds[1][0], runtime->view_bounds[1][2],
+                                                                 runtime->view_bounds[1][1], runtime->view_bounds[1][3]};
+                e = vr::VRCompositor()->Submit(vr::Eye_Right, (vr::Texture_t*)&right_eye, &right_bounds, vr::Submit_TextureWithPose);
+                if (e != vr::VRCompositorError_None) {
+                    spdlog::error("[VR] VRCompositor failed to submit right eye (resubmit): {}", (int)e);
+                    return e;
+                }
+                vr->m_submitted = true;
+            }
         }
     } else {
         // OpenXR texture
@@ -138,6 +161,28 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
         // OpenVR texture
         // Copy the back buffer to the right eye texture.
         if (runtime->is_openvr()) {
+            if (vr->is_using_async_aer()) {
+                vr::D3D12TextureData_t left_tex {
+                    m_openvr.get_left().texture.Get(),
+                    command_queue,
+                    0
+                };
+
+                vr::VRTextureWithPose_t left_eye{};
+                left_eye.handle = (void*)&left_tex;
+                left_eye.eType = vr::TextureType_DirectX12;
+                left_eye.eColorSpace = vr::ColorSpace_Auto;
+                left_eye.mDeviceToAbsoluteTracking = GlobalPool::get_openvr_pose(vr->m_presenter_frame_count - 1);
+
+                const auto left_bounds = vr::VRTextureBounds_t{runtime->view_bounds[0][0], runtime->view_bounds[0][2],
+                                                               runtime->view_bounds[0][1], runtime->view_bounds[0][3]};
+                auto e = vr::VRCompositor()->Submit(vr::Eye_Left, &left_eye, &left_bounds, vr::Submit_TextureWithPose); /*, vr::Submit_Default);*/
+
+                if (e != vr::VRCompositorError_None) {
+                    spdlog::error("[VR] VRCompositor failed to submit left eye (resubmit): {}", (int)e);
+                    return e;
+                }
+            }
             m_openvr.copy_right(eye_texture.Get());
 
             vr::D3D12TextureData_t right_tex {
@@ -159,9 +204,8 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             if (e != vr::VRCompositorError_None) {
                 spdlog::error("[VR] VRCompositor failed to submit right eye: {}", (int)e);
                 return e;
-            } else {
-                vr->m_submitted = true;
             }
+            vr->m_submitted = true;
 
             ++m_openvr.texture_counter;
         }

@@ -1010,7 +1010,7 @@ void VR::on_begin_rendering(int frame) {
     m_in_render = true;
 //    m_render_frame_count = m_engine_frame_count;
 //    on_wait_rendering(entry);
-    if ((frame)% 2 == m_left_eye_interval || is_using_async_aer()) {
+    if (frame % 2 == m_left_eye_interval || is_using_async_aer()) {
         if(runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::EARLY) {
             if (runtime->is_openxr()) {
                 if (g_framework->get_renderer_type() == Framework::RendererType::D3D11) {
@@ -1147,6 +1147,8 @@ void VR::on_draw_ui() {
     ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
     ImGui::TextWrapped("Render Resolution: %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
 
+    m_use_async_aer->draw("Use Async AER");
+
     if (get_runtime()->is_openvr()) {
         ImGui::TextWrapped("Resolution can be changed in SteamVR");
     } else if (get_runtime()->is_openxr()) {
@@ -1159,7 +1161,6 @@ void VR::on_draw_ui() {
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             m_openxr->resolution_scale = m_resolution_scale->value();
         }
-        m_use_async_aer->draw("Use Async AER");
 
         m_flat_screen_distance->draw("Flat Screen Distance");
         if (ImGui::IsItemDeactivatedAfterEdit())
