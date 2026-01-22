@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 #include <unordered_set>
 #include <filesystem>
 
@@ -17,6 +18,7 @@ class Mods;
 #include "D3D11Hook.hpp"
 #include "D3D12Hook.hpp"
 #include "DInputHook.hpp"
+#include "DisplayMetricsHook.hpp"
 #include "WindowsMessageHook.hpp"
 #include "math/Math.hpp"
 
@@ -374,8 +376,12 @@ private:
     void on_get_window_rect(auto result, auto wnd, auto rect);
     void on_get_client_rect(auto result, auto wnd, auto rect);
     void on_adjust_window_rect(auto result, auto wnd, auto rect, auto menu);
+    void on_get_window_info(auto result, auto wnd, auto info);
     bool on_clip_cursor(auto lpRect);
     void on_screen_to_client(auto result, auto wnd, auto point);
+
+private:
+    std::unique_ptr<DisplayMetricsHook> m_display_metrics_hook{};
 
 };
 

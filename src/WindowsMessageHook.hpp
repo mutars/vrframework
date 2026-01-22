@@ -17,6 +17,7 @@ public:
     std::function<void(int*,HWND, LPRECT)> on_get_client_rect;
     std::function<void(int*,HWND, LPRECT)> on_get_window_rect;
     std::function<void(int*,HWND, LPRECT, bool)> on_adjust_window_rect;
+    std::function<void(int*,HWND, PWINDOWINFO)> on_get_window_info;
     std::function<void(int*, HWND, LPPOINT)> on_screen_to_client;
     std::function<bool(LPRECT*)> on_clip_cursor;
 
@@ -59,12 +60,18 @@ private:
     safetyhook::InlineHook m_get_window_rect_hook;
     safetyhook::InlineHook m_get_client_rect_hook;
     safetyhook::InlineHook m_adjust_client_rect_hook;
+    safetyhook::InlineHook m_adjust_client_rect_ex_hook;
+    safetyhook::InlineHook m_adjust_client_rect_ex_for_dpi_hook;
+    safetyhook::InlineHook m_get_window_info_hook;
     safetyhook::InlineHook m_screen_to_client_hook;
     safetyhook::InlineHook m_clip_cursor_hook;
 
     static BOOL WINAPI onGetClientRect(_In_ HWND hWnd,_Out_ LPRECT lpRect);
     static BOOL WINAPI onGetWindowRect(_In_ HWND hWnd,_Out_ LPRECT lpRect);
     static BOOL WINAPI onAdjustWindowRect(_Inout_ LPRECT lpRect, DWORD dwStyle, BOOL bMenu);
+    static BOOL WINAPI onAdjustWindowRectEx(_Inout_ LPRECT lpRect, DWORD dwStyle, BOOL bMenu, DWORD dwExStyle);
+    static BOOL WINAPI onAdjustWindowRectExForDpi(_Inout_ LPRECT lpRect, DWORD dwStyle, BOOL bMenu, DWORD dwExStyle, UINT dpi);
+    static BOOL WINAPI onGetWindowInfo(_In_ HWND hWnd, _Inout_ PWINDOWINFO pwi);
     static BOOL WINAPI onScreenToClient(_In_ HWND hWnd, _Inout_ LPPOINT lpPoint);
     static BOOL WINAPI onClipCursor(_In_opt_ LPRECT lpRect);
 };

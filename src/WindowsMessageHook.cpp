@@ -1,14 +1,52 @@
 #include <unordered_map>
 #include <vector>
+#include <mutex>
+
+#include <intrin.h>
 
 #include <spdlog/spdlog.h>
 
 #include "utility/Thread.hpp"
+#include "utility/Module.hpp"
 
 #include "WindowsMessageHook.hpp"
 #include <SafetyHook.hpp>
 
 using namespace std;
+
+namespace {
+    std::once_flag g_game_module_once{};
+    uintptr_t g_game_base{};
+    size_t g_game_size{};
+
+    void init_game_module_range_once() {
+        std::call_once(g_game_module_once, []() {
+            auto base = ::GetModuleHandleW(nullptr);
+            if (base == nullptr) {
+                return;
+            }
+
+            const auto size_opt = utility::get_module_size(base);
+            if (!size_opt) {
+                return;
+            }
+
+            g_game_base = reinterpret_cast<uintptr_t>(base);
+            g_game_size = static_cast<size_t>(*size_opt);
+        });
+    }
+
+    bool is_game_caller() {
+        init_game_module_range_once();
+
+        if (g_game_base == 0 || g_game_size == 0) {
+            return false;
+        }
+
+        const auto addr = reinterpret_cast<uintptr_t>(_ReturnAddress());
+        return addr >= g_game_base && addr < (g_game_base + g_game_size);
+    }
+}
 
 static WindowsMessageHook* g_windows_message_hook{ nullptr };
 std::recursive_mutex g_proc_mutex{};
@@ -73,6 +111,30 @@ WindowsMessageHook::WindowsMessageHook(HWND wnd)
         spdlog::error("Failed to hook AdjustWindowRect");
     }
 
+    auto adjust_window_rect_ex_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "AdjustWindowRectEx");
+    if (adjust_window_rect_ex_fn != nullptr) {
+        m_adjust_client_rect_ex_hook = safetyhook::create_inline((void*)adjust_window_rect_ex_fn, onAdjustWindowRectEx);
+        if (!m_adjust_client_rect_ex_hook) {
+            spdlog::error("Failed to hook AdjustWindowRectEx");
+        }
+    }
+
+    auto adjust_window_rect_ex_for_dpi_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "AdjustWindowRectExForDpi");
+    if (adjust_window_rect_ex_for_dpi_fn != nullptr) {
+        m_adjust_client_rect_ex_for_dpi_hook = safetyhook::create_inline((void*)adjust_window_rect_ex_for_dpi_fn, onAdjustWindowRectExForDpi);
+        if (!m_adjust_client_rect_ex_for_dpi_hook) {
+            spdlog::error("Failed to hook AdjustWindowRectExForDpi");
+        }
+    }
+
+    auto get_window_info_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "GetWindowInfo");
+    if (get_window_info_fn != nullptr) {
+        m_get_window_info_hook = safetyhook::create_inline((void*)get_window_info_fn, onGetWindowInfo);
+        if (!m_get_window_info_hook) {
+            spdlog::error("Failed to hook GetWindowInfo");
+        }
+    }
+
     auto screen_to_client_fn = GetProcAddress(GetModuleHandleA("user32.dll"), "ScreenToClient");
     m_screen_to_client_hook = safetyhook::create_inline((void*)screen_to_client_fn, onScreenToClient);
     if (!m_screen_to_client_hook) {
@@ -132,7 +194,7 @@ BOOL WindowsMessageHook::onGetClientRect(HWND hWnd, LPRECT lpRect)
     auto on_get_client_rect = g_windows_message_hook->on_get_client_rect;
 
     auto result =  g_windows_message_hook->m_get_client_rect_hook.call<BOOL>(hWnd, lpRect);
-    if(on_get_client_rect) {
+    if(on_get_client_rect && is_game_caller()) {
         on_get_client_rect(&result, hWnd, lpRect);
     }
     return result;
@@ -142,7 +204,7 @@ BOOL WindowsMessageHook::onGetWindowRect(HWND hWnd, LPRECT lpRect)
 {
     auto result = g_windows_message_hook->m_get_window_rect_hook.call<BOOL>(hWnd, lpRect);
     auto on_get_window_rect = g_windows_message_hook->on_get_window_rect;
-    if(on_get_window_rect) {
+    if(on_get_window_rect && is_game_caller()) {
         on_get_window_rect(&result, hWnd, lpRect);
     }
     return result;
@@ -152,9 +214,73 @@ BOOL WindowsMessageHook::onAdjustWindowRect(LPRECT lpRect, DWORD dwStyle, BOOL b
 {
     auto on_adjust_window_rect = g_windows_message_hook->on_adjust_window_rect;
     auto result = g_windows_message_hook->m_adjust_client_rect_hook.call<BOOL>(lpRect, dwStyle, bMenu);
-    if(on_adjust_window_rect) {
+    if(on_adjust_window_rect && is_game_caller()) {
         on_adjust_window_rect(&result, g_windows_message_hook->m_wnd, lpRect, bMenu);
     }
+    return result;
+}
+
+BOOL WindowsMessageHook::onAdjustWindowRectEx(LPRECT lpRect, DWORD dwStyle, BOOL bMenu, DWORD dwExStyle)
+{
+    auto on_adjust_window_rect = g_windows_message_hook->on_adjust_window_rect;
+
+    if (!g_windows_message_hook->m_adjust_client_rect_ex_hook) {
+        const auto result = ::AdjustWindowRectEx(lpRect, dwStyle, bMenu, dwExStyle);
+        if (on_adjust_window_rect && is_game_caller()) {
+            auto mutable_result = result;
+            on_adjust_window_rect(&mutable_result, g_windows_message_hook->m_wnd, lpRect, bMenu);
+            return mutable_result;
+        }
+        return result;
+    }
+
+    auto result = g_windows_message_hook->m_adjust_client_rect_ex_hook.call<BOOL>(lpRect, dwStyle, bMenu, dwExStyle);
+    if (on_adjust_window_rect && is_game_caller()) {
+        on_adjust_window_rect(&result, g_windows_message_hook->m_wnd, lpRect, bMenu);
+    }
+    return result;
+}
+
+BOOL WindowsMessageHook::onAdjustWindowRectExForDpi(LPRECT lpRect, DWORD dwStyle, BOOL bMenu, DWORD dwExStyle, UINT dpi)
+{
+    auto on_adjust_window_rect = g_windows_message_hook->on_adjust_window_rect;
+
+    if (!g_windows_message_hook->m_adjust_client_rect_ex_for_dpi_hook) {
+        // If this API doesn't exist or wasn't hooked, fall back to AdjustWindowRectEx.
+        const auto result = ::AdjustWindowRectEx(lpRect, dwStyle, bMenu, dwExStyle);
+        if (on_adjust_window_rect && is_game_caller()) {
+            auto mutable_result = result;
+            on_adjust_window_rect(&mutable_result, g_windows_message_hook->m_wnd, lpRect, bMenu);
+            return mutable_result;
+        }
+        return result;
+    }
+
+    auto result = g_windows_message_hook->m_adjust_client_rect_ex_for_dpi_hook.call<BOOL>(lpRect, dwStyle, bMenu, dwExStyle, dpi);
+    if (on_adjust_window_rect && is_game_caller()) {
+        on_adjust_window_rect(&result, g_windows_message_hook->m_wnd, lpRect, bMenu);
+    }
+    return result;
+}
+
+BOOL WindowsMessageHook::onGetWindowInfo(HWND hWnd, PWINDOWINFO pwi)
+{
+    auto on_get_window_info = g_windows_message_hook->on_get_window_info;
+
+    if (!g_windows_message_hook->m_get_window_info_hook) {
+        auto result = ::GetWindowInfo(hWnd, pwi);
+        if (on_get_window_info && is_game_caller()) {
+            on_get_window_info(&result, hWnd, pwi);
+        }
+        return result;
+    }
+
+    auto result = g_windows_message_hook->m_get_window_info_hook.call<BOOL>(hWnd, pwi);
+
+    if (on_get_window_info && is_game_caller()) {
+        on_get_window_info(&result, hWnd, pwi);
+    }
+
     return result;
 }
 
@@ -164,7 +290,7 @@ BOOL WindowsMessageHook::onScreenToClient(HWND hWnd, LPPOINT lpPoint)
 
     auto result = g_windows_message_hook->m_screen_to_client_hook.call<BOOL>(hWnd, lpPoint);
 
-    if (on_screen_to_client) {
+    if (on_screen_to_client && is_game_caller()) {
         on_screen_to_client(&result, hWnd, lpPoint);
     }
 

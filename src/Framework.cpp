@@ -42,6 +42,7 @@ extern "C" {
 //#include "LicenseStrings.hpp"
 #include "mods/VRConfig.hpp"
 //#include "mods/IntegrityCheckBypass.hpp"
+#include "DisplayMetricsHook.hpp"
 #include "Framework.hpp"
 
 namespace fs = std::filesystem;
@@ -50,6 +51,26 @@ using namespace std::literals;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 std::unique_ptr<Framework> g_framework{};
+
+namespace {
+    bool get_active_hmd_resolution(LONG& out_w, LONG& out_h) {
+        const auto vr = VR::get();
+        if (!vr->is_hmd_active()) {
+            return false;
+        }
+
+        const auto w = static_cast<LONG>(vr->get_hmd_width());
+        const auto h = static_cast<LONG>(vr->get_hmd_height());
+
+        if (w <= 0 || h <= 0) {
+            return false;
+        }
+
+        out_w = w;
+        out_h = h;
+        return true;
+    }
+}
 
 void Framework::hook_monitor() {
     std::scoped_lock _{ m_hook_monitor_mutex };
@@ -164,6 +185,10 @@ Framework::Framework(HMODULE module)
     // Set pattern to include thread ID and seconds.milliseconds with short log level
     spdlog::set_pattern("[%S.%e] [%L] [tid:%t] %v");
     spdlog::flush_on(spdlog::level::info);
+
+    // Install Win32/GDI hooks that affect how games pick internal render resolution.
+    // This is intentionally before any D3D work, and does not spoof DXGI/D3D.
+    m_display_metrics_hook = std::make_unique<DisplayMetricsHook>();
 
     if (s_fallback_appdata) {
         spdlog::warn("Failed to write to current directory, falling back to appdata folder");
@@ -790,37 +815,89 @@ bool Framework::on_clip_cursor(auto lpRect) {
 }
 
 void Framework::on_get_window_rect(auto result, auto wnd, auto rect) {
-    static auto vr = VR::get();
-    if(wnd == m_wnd && vr->is_hmd_active()) {
-        int width = vr->get_hmd_width();
-        int height = vr->get_hmd_height();
-        RECT clientRect;
-        WindowsMessageHook::GetClientRectOriginal(wnd, &clientRect);
-        int origWidth = clientRect.right - clientRect.left;
-        int origHeight = clientRect.bottom - clientRect.top;
-        rect->right = rect->right - origWidth + width;
-        rect->bottom = rect->bottom - origHeight + height;
+    if (wnd != m_wnd || rect == nullptr) {
+        return;
     }
+
+    LONG hmd_w = 0;
+    LONG hmd_h = 0;
+    if (!get_active_hmd_resolution(hmd_w, hmd_h)) {
+        return;
+    }
+
+    RECT clientRect{};
+    if (!WindowsMessageHook::GetClientRectOriginal(wnd, &clientRect)) {
+        return;
+    }
+
+    const int origWidth = clientRect.right - clientRect.left;
+    const int origHeight = clientRect.bottom - clientRect.top;
+
+    rect->right = rect->right - origWidth + hmd_w;
+    rect->bottom = rect->bottom - origHeight + hmd_h;
 }
 
 void Framework::on_get_client_rect(auto result, auto wnd, auto rect) {
-    static auto vr = VR::get();
-    if(wnd == m_wnd && vr->is_hmd_active()) {
-        int width = vr->get_hmd_width();
-        int height = vr->get_hmd_height();
-        rect->right = rect->left + width;
-        rect->bottom = rect->top + height;
+    if (wnd != m_wnd || rect == nullptr) {
+        return;
     }
+
+    LONG hmd_w = 0;
+    LONG hmd_h = 0;
+    if (!get_active_hmd_resolution(hmd_w, hmd_h)) {
+        return;
+    }
+
+    rect->right = rect->left + hmd_w;
+    rect->bottom = rect->top + hmd_h;
 }
 
 void Framework::on_adjust_window_rect(auto result, auto wnd, auto rect, auto menu) {
-    static auto vr = VR::get();
-//    if(wnd == m_wnd && vr->is_hmd_active()) {
-//        int width = vr->get_hmd_width();
-//        int height = vr->get_hmd_height();
-//        rect->right = rect->left + width;
-//        rect->bottom = rect->top + height;
-//    }
+    if (wnd != m_wnd || rect == nullptr) {
+        return;
+    }
+
+    LONG hmd_w = 0;
+    LONG hmd_h = 0;
+    if (!get_active_hmd_resolution(hmd_w, hmd_h)) {
+        return;
+    }
+
+    rect->right = rect->left + hmd_w;
+    rect->bottom = rect->top + hmd_h;
+}
+
+void Framework::on_get_window_info(auto result, auto wnd, auto info) {
+    if (wnd != m_wnd || info == nullptr) {
+        return;
+    }
+
+    LONG hmd_w = 0;
+    LONG hmd_h = 0;
+    if (!get_active_hmd_resolution(hmd_w, hmd_h)) {
+        return;
+    }
+
+    const RECT original_window = info->rcWindow;
+    const RECT original_client = info->rcClient;
+
+    const auto window_left = original_window.left;
+    const auto window_top = original_window.top;
+    const auto client_left = original_client.left;
+    const auto client_top = original_client.top;
+
+    // Rewrite client size to HMD resolution.
+    info->rcClient.right = client_left + hmd_w;
+    info->rcClient.bottom = client_top + hmd_h;
+
+    // Preserve original border extents.
+    const int border_w = (original_window.right - original_window.left) - (original_client.right - original_client.left);
+    const int border_h = (original_window.bottom - original_window.top) - (original_client.bottom - original_client.top);
+
+    info->rcWindow.left = window_left;
+    info->rcWindow.top = window_top;
+    info->rcWindow.right = window_left + hmd_w + border_w;
+    info->rcWindow.bottom = window_top + hmd_h + border_h;
 }
 
 
@@ -1666,6 +1743,9 @@ bool Framework::initialize_windows_message_hook() {
         };
         m_windows_message_hook->on_adjust_window_rect = [this](auto result, auto wnd, auto rect, auto menu) {
             on_adjust_window_rect(result, wnd, rect, menu);
+        };
+        m_windows_message_hook->on_get_window_info = [this](auto result, auto hWnd, auto info) {
+            on_get_window_info(result, hWnd, info);
         };
         m_windows_message_hook->on_clip_cursor = [this](auto rect) {
             return on_clip_cursor(rect);
