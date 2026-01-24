@@ -606,6 +606,9 @@ bool VR::is_any_action_down() {
 
 void VR::update_hmd_state(int frame) {
     auto runtime = get_runtime();
+    if (frame % 2 == m_right_eye_interval && !is_using_async_aer()) {
+        return;
+    }
 
     runtime->update_poses(frame);
 
@@ -622,11 +625,18 @@ void VR::update_hmd_state(int frame) {
         auto& pipeline_state = m_openxr->get_pipeline_state();
         GlobalPool::submit_openxr_pose(pipeline_state.stage_views[frame % 2].pose, frame);
         GlobalPool::submit_openxr_fov(pipeline_state.active_fov[frame % 2], frame);
+        if (!is_using_async_aer()) {
+            GlobalPool::submit_openxr_pose(pipeline_state.stage_views[(frame + 1) % 2].pose, frame + 1);
+            GlobalPool::submit_openxr_fov(pipeline_state.active_fov[(frame + 1) % 2], frame + 1);
+        }
     }
 
     if(runtime->is_openvr()) {
         const auto& hmd_pose = m_openvr->render_poses[vr::k_unTrackedDeviceIndex_Hmd];
         GlobalPool::submit_openvr_pose(hmd_pose.mDeviceToAbsoluteTracking, frame);
+        if (!is_using_async_aer()) {
+            GlobalPool::submit_openvr_pose(hmd_pose.mDeviceToAbsoluteTracking, frame + 1);
+        }
     }
 
     runtime->got_first_poses = true;
@@ -1147,7 +1157,9 @@ void VR::on_draw_ui() {
     ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
     ImGui::TextWrapped("Render Resolution: %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
 
-    m_use_async_aer->draw("Use Async AER");
+    if (g_framework->is_dx12()) {
+        m_use_async_aer->draw("Use Async AER");
+    }
 
     if (get_runtime()->is_openvr()) {
         ImGui::TextWrapped("Resolution can be changed in SteamVR");
