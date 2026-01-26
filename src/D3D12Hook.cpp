@@ -28,7 +28,7 @@ bool D3D12Hook::hook() {
     IDXGISwapChain3* swap_chain{ nullptr };
     ID3D12Device* device{ nullptr };
 
-    D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
+    D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
     DXGI_SWAP_CHAIN_DESC1 swap_chain_desc1;
 
     ZeroMemory(&swap_chain_desc1, sizeof(swap_chain_desc1));
@@ -471,20 +471,25 @@ HRESULT WINAPI D3D12Hook::present(IDXGISwapChain3* swap_chain, UINT sync_interva
 
     swap_chain->GetDevice(IID_PPV_ARGS(&d3d12->m_device));
 
+    ID3D12CommandQueue * command_queue = nullptr;
+
     if (d3d12->m_device != nullptr) {
+
+        auto real_swap_chain = (uintptr_t)swap_chain;
         if (d3d12->m_using_proton_swapchain) {
-            const auto real_swapchain = *(uintptr_t*)((uintptr_t)swap_chain + d3d12->m_proton_swapchain_offset);
-            d3d12->m_command_queue = *(ID3D12CommandQueue**)(real_swapchain + d3d12->m_command_queue_offset);
-        } else {
-            d3d12->m_command_queue = *(ID3D12CommandQueue**)((uintptr_t)swap_chain + d3d12->m_command_queue_offset);
+            real_swap_chain = *(uintptr_t*)((uintptr_t)swap_chain + d3d12->m_proton_swapchain_offset);
+        }
+        command_queue = *(ID3D12CommandQueue**)(real_swap_chain + d3d12->m_command_queue_offset);
+        if (command_queue == nullptr || IsBadReadPtr(command_queue, sizeof(void*)) && d3d12->m_using_proton_swapchain) {
+            //double wrap issue after alt tab for starfield, don't want to recurse, hope one level is suffitient
+            real_swap_chain = *(uintptr_t*)((uintptr_t)real_swap_chain + d3d12->m_proton_swapchain_offset);
+            command_queue = *(ID3D12CommandQueue**)(real_swap_chain + d3d12->m_command_queue_offset);
         }
     }
 
-//    if(d3d12->m_command_queue == nullptr || IsBadReadPtr(d3d12->m_command_queue,sizeof(void*))) {
-//        auto vr = VR::get();
-//        auto command_queue = CreationEngineDirectX12Module::GetCommandQueue(vr->m_has_hw_scheduling);
-//        d3d12->m_command_queue = command_queue;
-//    }
+    if (command_queue != nullptr && !IsBadReadPtr(command_queue, sizeof(void*))) {
+        d3d12->m_command_queue = command_queue;
+    }
 
     if (d3d12->m_swapchain_0 == nullptr) {
         d3d12->m_swapchain_0 = swap_chain;
@@ -593,11 +598,11 @@ HRESULT WINAPI D3D12Hook::resize_buffers(IDXGISwapChain3* swap_chain, UINT buffe
     HWND swapchain_wnd{nullptr};
     swap_chain->GetHwnd(&swapchain_wnd);
 
-    /*if (WindowFilter::get().is_filtered(swapchain_wnd)) {
-        return resize_buffers_fn(swap_chain, buffer_count, width, height, new_format, swap_chain_flags);
-    }*/
-
     auto resize_buffers_fn = d3d12->m_swapchain_hook->get_method<decltype(D3D12Hook::resize_buffers)*>(13);
+
+    if (WindowFilter::get().is_filtered(swapchain_wnd)) {
+        return resize_buffers_fn(swap_chain, buffer_count, width, height, new_format, swap_chain_flags);
+    }
 
     d3d12->m_display_width = width;
     d3d12->m_display_height = height;
@@ -666,11 +671,11 @@ HRESULT WINAPI D3D12Hook::resize_target(IDXGISwapChain3* swap_chain, const DXGI_
     HWND swapchain_wnd{nullptr};
     swap_chain->GetHwnd(&swapchain_wnd);
 
-    /*if (WindowFilter::get().is_filtered(swapchain_wnd)) {
-        return resize_target_fn(swap_chain, new_target_parameters);
-    }*/
-
     auto resize_target_fn = d3d12->m_swapchain_hook->get_method<decltype(D3D12Hook::resize_target)*>(14);
+
+    if (WindowFilter::get().is_filtered(swapchain_wnd)) {
+        return resize_target_fn(swap_chain, new_target_parameters);
+    }
 
     d3d12->m_render_width = new_target_parameters->Width;
     d3d12->m_render_height = new_target_parameters->Height;

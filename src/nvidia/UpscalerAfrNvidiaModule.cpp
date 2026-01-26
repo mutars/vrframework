@@ -200,9 +200,9 @@ sl::Result UpscalerAfrNvidiaModule::on_slSetTag(sl::ViewportHandle& viewport, co
     static auto            instance    = UpscalerAfrNvidiaModule::Get();
     static auto            original_fn = instance->m_set_tag_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetTag)>();
     static auto            vr          = VR::get();
-    spdlog::error("UNEXPECTED CALL TO slSetTag");
-    exit(1);
-    if(vr->get_current_render_eye() == VRRuntime::Eye::RIGHT) {
+    // spdlog::error("UNEXPECTED CALL TO slSetTag");
+    // exit(1);
+    if(vr->m_render_frame_count % 2 == 0 && instance->m_enabled->value()) {
         sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
         return original_fn(afr_viewport_handle, tags, numTags, cmdBuffer);
     }
