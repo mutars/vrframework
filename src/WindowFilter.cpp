@@ -20,19 +20,21 @@ WindowFilter::WindowFilter() {
 
             m_last_job_tick = std::chrono::steady_clock::now();
 
-            if (m_window_jobs.empty()) {
-                return;
+            std::vector<HWND> jobs_copy;
+            {
+                std::scoped_lock _{m_mutex};
+                if (m_window_jobs.empty()) {
+                    continue;
+                }
+                jobs_copy.assign(m_window_jobs.begin(), m_window_jobs.end());
+                m_window_jobs.clear();
             }
 
-            std::scoped_lock _{m_mutex};
-
-            for (const auto hwnd : m_window_jobs) {
+            for (const auto hwnd : jobs_copy) {
                 if (is_filtered_nocache(hwnd)) {
                     filter_window(hwnd);
                 }
             }
-
-            m_window_jobs.clear();
         }
     });
 }
