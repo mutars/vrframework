@@ -136,9 +136,9 @@ public:
 //    int32_t get_game_frame_count() const;
 
     bool is_using_async_aer() const {
-        //TODO not implemented for dx11
         // openVR has issues with 2 different poses at the same time for non steam native VR hmds like oculus
         // for these exceptions need to implement viewport cropping and viewport reprojection
+        //TODO it looks like runtime does not fully support dx11 reprojeciton, I need to do it manually
         return m_use_async_aer->value() && g_framework->is_dx12();
     }
 

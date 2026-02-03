@@ -362,44 +362,9 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             m_toneMap->Process(context.Get());
         }
 
-        if (runtime->ready()) {
-            if (runtime->is_openxr()) {
-                LOG_VERBOSE("Copying right eye");
-                m_openxr.copy(1, (ID3D11Texture2D*)copy_from_tex.Get());
-            }
-
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
-                runtime->synchronize_frame(vr->m_presenter_frame_count);
-
-                if (!runtime->got_first_poses) {
-                    runtime->update_poses(vr->m_presenter_frame_count + 1);
-                }
-            }
-        }
-
-        if (runtime->is_openxr() && vr->m_openxr->ready()) {
-            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
-                LOG_VERBOSE("Beginning frame.");
-                vr->m_openxr->begin_frame(vr->m_presenter_frame_count);
-            }
-
-            LOG_VERBOSE("Ending frame");
-            std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
-
-            auto& openxr_overlay = vr->get_overlay_component().get_openxr();
-
-            if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI)) {
-                const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
-
-                if (framework_quad) {
-                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
-                }
-            }
-
-            auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count, scene_depth_tex != nullptr);
-
-            vr->m_openxr->needs_pose_update = true;
-            vr->m_submitted = result == XR_SUCCESS;
+        if (runtime->ready() && runtime->is_openxr()) {
+            LOG_VERBOSE("Copying right eye");
+            m_openxr.copy(1, (ID3D11Texture2D*)copy_from_tex.Get());
         }
 
         if (runtime->is_openvr()) {
@@ -438,8 +403,46 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             vr->m_submitted = true;
         }
 
+    }
+
+    if (is_right_eye_frame || vr->is_using_async_aer()) {
+        if (runtime->ready()) {
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !runtime->got_first_sync) {
+                runtime->synchronize_frame(vr->m_presenter_frame_count);
+
+                if (!runtime->got_first_poses) {
+                    runtime->update_poses(vr->m_presenter_frame_count + 1);
+                }
+            }
+        }
+
+        if (runtime->is_openxr() && vr->m_openxr->ready()) {
+            if (runtime->get_synchronize_stage() == VRRuntime::SynchronizeStage::VERY_LATE || !vr->m_openxr->frame_began) {
+                LOG_VERBOSE("Beginning frame.");
+                vr->m_openxr->begin_frame(vr->m_presenter_frame_count);
+            }
+
+            LOG_VERBOSE("Ending frame");
+            std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
+
+            auto& openxr_overlay = vr->get_overlay_component().get_openxr();
+
+            if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI)) {
+                const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
+
+                if (framework_quad) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&framework_quad->get());
+                }
+            }
+
+            auto result = vr->m_openxr->end_frame(quad_layers, vr->m_presenter_frame_count, scene_depth_tex != nullptr);
+
+            vr->m_openxr->needs_pose_update = true;
+            vr->m_submitted = result == XR_SUCCESS;
+        }
+
         // Desktop spectator view
-        if (runtime->ready() && vr->m_desktop_fix->value()) {
+        if (runtime->ready() && vr->m_desktop_fix->value() && is_right_eye_frame) {
             if (vr->m_desktop_fix_skip_present->value()) {
                 hook->ignore_next_present();
             } else if (backbufferIs8Bit) {
