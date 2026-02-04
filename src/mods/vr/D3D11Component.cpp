@@ -299,6 +299,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openxr() && runtime->ready()) {
             LOG_VERBOSE("Copying left eye");
             m_openxr.copy(0, (ID3D11Texture2D*)copy_from_tex.Get());
+
+            if (vr->is_using_async_aer()) {
+                auto right_eye_source = backbufferIs8Bit ? m_right_eye_tex : m_right_eye_rt.tex;
+                LOG_VERBOSE("Copying right eye (async AER extra copy)");
+                m_openxr.copy(1, (ID3D11Texture2D*)right_eye_source.Get());
+            }
         }
 
         if (runtime->is_openvr()) {
@@ -365,6 +371,12 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->ready() && runtime->is_openxr()) {
             LOG_VERBOSE("Copying right eye");
             m_openxr.copy(1, (ID3D11Texture2D*)copy_from_tex.Get());
+
+            if (vr->is_using_async_aer()) {
+                auto left_eye_source = backbufferIs8Bit ? m_left_eye_tex : m_left_eye_rt.tex;
+                LOG_VERBOSE("Copying left eye (async AER extra copy)");
+                m_openxr.copy(0, (ID3D11Texture2D*)left_eye_source.Get());
+            }
         }
 
         if (runtime->is_openvr()) {
