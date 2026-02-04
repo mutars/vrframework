@@ -366,6 +366,8 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             m_toneMap->SetExposure(settings.toneMapExposure);
             m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
             m_toneMap->Process(context.Get());
+        } else if (backbufferIs8Bit) {
+            context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
         }
 
         if (runtime->ready() && runtime->is_openxr()) {
