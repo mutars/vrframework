@@ -1157,9 +1157,7 @@ void VR::on_draw_ui() {
     ImGui::TextWrapped("VR Runtime: %s", get_runtime()->name().data());
     ImGui::TextWrapped("Render Resolution: %d x %d", get_runtime()->get_width(), get_runtime()->get_height());
 
-    if (g_framework->is_dx12()) {
-        m_use_async_aer->draw("Use Async AER");
-    }
+    m_use_async_aer->draw("Use Async AER");
 
     if (get_runtime()->is_openvr()) {
         ImGui::TextWrapped("Resolution can be changed in SteamVR");

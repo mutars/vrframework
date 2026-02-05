@@ -535,3 +535,4 @@ FodyWeavers.xsd
 build/
 
 artifact/*
+nul

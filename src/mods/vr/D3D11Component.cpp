@@ -299,6 +299,10 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
         if (runtime->is_openxr() && runtime->ready()) {
             LOG_VERBOSE("Copying left eye");
             m_openxr.copy(0, (ID3D11Texture2D*)copy_from_tex.Get());
+            if (vr->is_using_async_aer()) {
+                auto other_eye_tex = backbufferIs8Bit ? m_right_eye_tex.Get() : (ID3D11Texture2D*)m_right_eye_rt.tex.Get();
+                m_openxr.copy(1, other_eye_tex);
+            }
         }
 
         if (runtime->is_openvr()) {
@@ -360,11 +364,17 @@ vr::EVRCompositorError D3D11Component::on_frame(VR* vr) {
             m_toneMap->SetExposure(settings.toneMapExposure);
             m_toneMap->SetHDRSourceTexture(m_backbuffer_copy_rt);
             m_toneMap->Process(context.Get());
+        } else if (backbufferIs8Bit) {
+            context->CopyResource(m_right_eye_tex.Get(), backbuffer.Get());
         }
 
         if (runtime->ready() && runtime->is_openxr()) {
             LOG_VERBOSE("Copying right eye");
             m_openxr.copy(1, (ID3D11Texture2D*)copy_from_tex.Get());
+            if (vr->is_using_async_aer()) {
+                auto other_eye_tex = backbufferIs8Bit ? m_left_eye_tex.Get() : (ID3D11Texture2D*)m_left_eye_rt.tex.Get();
+                m_openxr.copy(0, other_eye_tex);
+            }
         }
 
         if (runtime->is_openvr()) {

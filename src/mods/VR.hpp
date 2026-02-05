@@ -139,7 +139,7 @@ public:
         // openVR has issues with 2 different poses at the same time for non steam native VR hmds like oculus
         // for these exceptions need to implement viewport cropping and viewport reprojection
         //TODO it looks like runtime does not fully support dx11 reprojeciton, I need to do it manually
-        return m_use_async_aer->value() && g_framework->is_dx12();
+        return m_use_async_aer->value();
     }
 
     bool is_gui_enabled() const {
