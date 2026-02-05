@@ -34,12 +34,14 @@ Both runtimes implement it. D3D components delegate to it instead of calling run
   different API entirely
 - High regression risk touching both D3D11 and D3D12 submission logic
 
-**Risk: HIGH**
+**Risk: HIGH** — Rejected.
 
-### Plan B: Minimal Change — OverlayComponent Extension
+### Plan B: Minimal Change — OverlayComponent Extension (Recommended)
 
 Extends `OverlayComponent` with a game-view overlay handle. D3D components get a small conditional
-to redirect OpenVR texture submission to the overlay when flat mode is active.
+to redirect OpenVR texture submission to the overlay when flat mode is active. Uses the existing
+`ModSettings::showFlatScreenDisplay()` as the sole control flag — no new enums, no runtime state
+machine, no capability queries.
 
 **New files**: none
 **Files modified**: ~6 total
@@ -48,40 +50,39 @@ to redirect OpenVR texture submission to the overlay when flat mode is active.
 - Small diff, leverages existing overlay infrastructure
 - Doesn't touch stereo submission paths
 - Low risk, fast to implement
+- Single control flag (`showFlatScreenDisplay()`) governs both runtimes
 
 **Cons:**
-- No abstraction — future view modes (cylinder, passthrough) require more ad-hoc branches
 - Duplicates flat-screen positioning logic between OpenXR.cpp and OverlayComponent
-- D3D component branching complexity grows with each new mode
+- OpenVR overlay quality is lower than compositor (no ATW/reprojection) — platform limitation
 
 **Risk: LOW**
 
-### Plan C: Hybrid — ViewMode on VRRuntime (Recommended)
+### Plan C: Hybrid — ViewMode on VRRuntime
 
-Adds a `ViewMode` enum and virtual methods to `VRRuntime`. Each runtime implements mode switching
-natively. OpenXR uses its existing composition layer system. OpenVR uses `IVROverlay` managed
-through `OverlayComponent`.
+Adds a `ViewMode` enum and virtual methods (`active_view_mode`, `set_view_mode`,
+`supports_view_mode`) to `VRRuntime`. Each runtime implements mode switching natively.
 
 **New files**: none
 **Files modified**: ~8 total
 
-**Pros:**
-- View mode is a first-class runtime concept at the right abstraction level
-- Doesn't restructure working stereo paths (only adds guard conditions)
-- Naturally extensible for cylinder, passthrough, multi-view
-- Respects the genuine asymmetry between OpenVR and OpenXR APIs
+**Analysis:** Overengineered for the current need. We support two runtimes and they're aligned
+on capabilities. Adding a ViewMode state machine, capability queries, and notification patterns
+when `showFlatScreenDisplay()` already exists as the control flag adds unnecessary abstraction.
+The extra indirection doesn't pay for itself when the D3D components already branch on runtime
+type anyway.
 
-**Cons:**
-- D3D components still need runtime-type checks for OpenVR flat mode
-- OpenVR overlay quality is lower than compositor (no ATW/reprojection)
+**Risk: MEDIUM-LOW** — Rejected (unnecessary complexity).
 
-**Risk: MEDIUM-LOW**
+## Recommended Plan: B (Minimal OverlayComponent Extension)
 
-## Recommended Plan: C (Hybrid) with OverlayComponent Delegation
+The existing `ModSettings::showFlatScreenDisplay()` already controls flat mode for OpenXR.
+The only work is:
+1. Remove the OpenVR guard so the flag applies to both runtimes
+2. Add a game-view overlay to `OverlayComponent` for OpenVR's `IVROverlay` path
+3. Add guards in D3D components to route OpenVR textures to the overlay instead of compositor
 
-Plan C with one refinement from Plan B: the `OpenVR` runtime declares the mode, but
-`OverlayComponent` manages the actual OpenVR overlay lifecycle (create/show/hide/texture).
-This keeps overlay management consolidated in the class that already handles it.
+No new enums. No new virtual methods on VRRuntime. No mode state machine.
 
 ## Current Architecture (Relevant Paths)
 
@@ -96,121 +97,155 @@ Frame Submission Flow (per eye):
       ├── if OpenVR: VRCompositor()->Submit(eye, texture, bounds)
       └── if right_eye or async_aer:
           ├── OpenXR: end_frame(quad_layers, frame, has_depth)
-          │   ├── if STEREO: XrCompositionLayerProjection
-          │   └── if FLAT:   XrCompositionLayerQuad    ← exists
-          └── OpenVR: (no end_frame equivalent)        ← gap
+          │   ├── if !showFlatScreenDisplay(): XrCompositionLayerProjection
+          │   └── if  showFlatScreenDisplay(): XrCompositionLayerQuad  ← exists
+          └── OpenVR: (no end_frame / no flat mode)                   ← gap
 ```
 
 ## Proposed Architecture
 
-### Step 1: ViewMode Enum on VRRuntime
+### Step 1: Remove OpenVR Guard in ModSettings
 
 ```
-File: src/mods/vr/runtimes/VRRuntime.hpp
+File: src/ModSettings.cpp
 
-Add:
-  enum class ViewMode : uint8_t {
-    STEREO_PROJECTION,
-    FLAT_QUAD,
-    FLAT_CYLINDER,
-  };
+Before:
+  bool showFlatScreenDisplay() {
+      static auto vr = VR::get();
+      //TODO fix for openvr
+      if (vr->is_hmd_active() && vr->get_runtime()->is_openvr()) {
+          return false;
+      }
+      return g_internalSettings.forceFlatScreen || g_internalSettings.showQuadDisplay;
+  }
 
-  virtual ViewMode active_view_mode() const;
-  virtual bool supports_view_mode(ViewMode mode) const;
-  virtual void set_view_mode(ViewMode mode);
+After:
+  bool showFlatScreenDisplay() {
+      return g_internalSettings.forceFlatScreen || g_internalSettings.showQuadDisplay;
+  }
 ```
 
-### Step 2: OpenXR Implementation
+This makes `showFlatScreenDisplay()` runtime-agnostic. OpenXR's `end_frame()` at
+`OpenXR.cpp:1420` already checks this flag and needs no changes.
 
-```
-File: src/mods/vr/runtimes/OpenXR.cpp
-
-Change end_frame() line 1420:
-  Before: if (!ModSettings::showFlatScreenDisplay())
-  After:  if (active_view_mode() == ViewMode::STEREO_PROJECTION)
-
-Add FLAT_CYLINDER case using XrCompositionLayerCylinderKHR
-(extension already checked via is_cylinder_layer_allowed())
-```
-
-### Step 3: OpenVR Implementation
-
-```
-File: src/mods/vr/runtimes/OpenVR.hpp
-
-Add:
-  ViewMode m_view_mode{ViewMode::STEREO_PROJECTION};
-  void set_view_mode(ViewMode mode) override;
-  ViewMode active_view_mode() const override;
-  bool supports_view_mode(ViewMode mode) const override;
-
-File: src/mods/vr/runtimes/OpenVR.cpp
-
-  supports_view_mode() returns true for STEREO, FLAT_QUAD, FLAT_CYLINDER
-  set_view_mode() notifies OverlayComponent to show/hide game view overlay
-```
-
-### Step 4: OverlayComponent Game View Overlay
+### Step 2: Add Game View Overlay to OverlayComponent
 
 ```
 File: src/mods/vr/OverlayComponent.hpp
 
 Add:
-  vr::VROverlayHandle_t m_game_view_overlay{k_ulOverlayHandleInvalid};
+  vr::VROverlayHandle_t m_game_view_overlay{vr::k_ulOverlayHandleInvalid};
   bool m_game_view_active{false};
 
-  void activate_game_view_overlay(ViewMode mode);
+  void activate_game_view_overlay();
   void deactivate_game_view_overlay();
-  void submit_game_view_texture_d3d11(ID3D11Texture2D* tex);
-  void submit_game_view_texture_d3d12(ID3D12Resource* tex, ID3D12CommandQueue* queue);
-  void update_game_view_transform(float distance, const Matrix4x4f& center_stage);
-
-File: src/mods/vr/OverlayComponent.cpp
-
-  activate_game_view_overlay():
-    Create overlay if needed (VROverlay()->CreateOverlay)
-    ShowOverlay, SetOverlayWidthInMeters
-    If FLAT_CYLINDER: SetOverlayCurvature()
-
-  submit_game_view_texture_d3d11():
-    SetOverlayTexture with DirectX texture
-    Update transform (distance + center_stage)
-
-  deactivate_game_view_overlay():
-    HideOverlay
+  void submit_game_view_texture_d3d11(ID3D11Texture2D* tex, VRRuntime* runtime);
+  void submit_game_view_texture_d3d12(ID3D12Resource* tex, ID3D12CommandQueue* queue,
+                                      VRRuntime* runtime);
 ```
 
-### Step 5: D3D Component Guards
+```
+File: src/mods/vr/OverlayComponent.cpp
+
+on_initialize_openvr() — add after existing overlay creation:
+  Create "VRFramework_GameView" overlay via VROverlay()->CreateOverlay()
+  Set width to 2.0m (matches OpenXR quad layer size)
+  Set input method to VROverlayInputMethod_None
+  Keep hidden initially (HideOverlay)
+
+activate_game_view_overlay():
+  VROverlay()->ShowOverlay(m_game_view_overlay)
+  m_game_view_active = true
+
+deactivate_game_view_overlay():
+  VROverlay()->HideOverlay(m_game_view_overlay)
+  m_game_view_active = false
+
+submit_game_view_texture_d3d11(tex, runtime):
+  if (!m_game_view_active) activate_game_view_overlay()
+
+  // Set texture
+  vr::Texture_t overlay_tex{(void*)tex, vr::TextureType_DirectX, vr::ColorSpace_Auto}
+  VROverlay()->SetOverlayTexture(m_game_view_overlay, &overlay_tex)
+
+  // Position: reuse same math as OpenXR (OpenXR.cpp:1472-1478)
+  flat_screen = glm::mat4(1.0f)
+  flat_screen[3][2] = -runtime->m_flat_screen_distance
+  flat_screen = runtime->m_center_stage * flat_screen
+  Convert to HmdMatrix34_t
+  VROverlay()->SetOverlayTransformAbsolute(m_game_view_overlay,
+      vr::TrackingUniverseStanding, &transform)
+
+  // Maintain aspect ratio (matches OpenXR quad: 2.0m wide)
+  VROverlay()->SetOverlayWidthInMeters(m_game_view_overlay, 2.0f)
+
+submit_game_view_texture_d3d12(tex, queue, runtime):
+  Same as d3d11 but wraps texture in vr::D3D12TextureData_t{tex, queue, 0}
+  Uses vr::TextureType_DirectX12
+```
+
+### Step 3: D3D Component Guards
+
+The key change: when `showFlatScreenDisplay()` is true and runtime is OpenVR, route
+the left eye texture to the overlay and skip `VRCompositor()->Submit()`.
+
+Only the left eye texture is submitted (same as OpenXR which uses a single quad with
+`XR_EYE_VISIBILITY_BOTH`). The right eye compositor submission is also skipped.
 
 ```
 File: src/mods/vr/D3D11Component.cpp
 
-In OpenVR submission blocks (~lines 308, 380):
-  if (runtime->active_view_mode() != ViewMode::STEREO_PROJECTION) {
-    overlay.submit_game_view_texture_d3d11(eye_tex);
-    // skip VRCompositor()->Submit()
-  } else {
-    // existing submission code unchanged
+In left-eye OpenVR block (~line 308):
+  if (runtime->is_openvr()) {
+      if (ModSettings::showFlatScreenDisplay()) {
+          auto& overlay = vr->get_overlay_component();
+          overlay.submit_game_view_texture_d3d11(m_left_eye_tex.Get(), runtime);
+      } else {
+          // existing VRCompositor()->Submit() code unchanged
+      }
+  }
+
+In right-eye OpenVR block (~line 380):
+  if (runtime->is_openvr()) {
+      if (ModSettings::showFlatScreenDisplay()) {
+          // skip compositor submit — overlay already showing left eye
+      } else {
+          // existing submission code unchanged
+      }
   }
 
 File: src/mods/vr/D3D12Component.cpp
 
-Same pattern in OpenVR blocks (~lines 97, 163)
+Same pattern in OpenVR blocks (~lines 97, 163):
+  Left eye: route to overlay.submit_game_view_texture_d3d12()
+  Right eye: skip compositor submit
 ```
 
-### Step 6: ModSettings and UI
+### Step 4: Handle Mode Transitions
+
+When `showFlatScreenDisplay()` transitions from true→false, the game view overlay
+must be hidden so the compositor stereo view is visible again.
 
 ```
-File: src/ModSettings.cpp
+File: src/mods/vr/D3D11Component.cpp / D3D12Component.cpp
 
-Remove OpenVR guard (lines 12-14).
-showFlatScreenDisplay() drives set_view_mode() via VR.cpp.
+In the OpenVR submission blocks, after the showFlatScreenDisplay() check:
+  if (!ModSettings::showFlatScreenDisplay() && overlay.m_game_view_active) {
+      overlay.deactivate_game_view_overlay();
+  }
+```
 
+Alternatively, this can be checked once per frame in `OverlayComponent::on_pre_imgui_frame()`
+which already runs every frame.
+
+### Step 5: Enable UI Sliders for OpenVR
+
+```
 File: src/mods/VR.cpp
 
-Enable flat screen distance slider for OpenVR (currently OpenXR-only)
-Enable FOV scale sliders for OpenVR
-Wire ModSettings changes to runtime->set_view_mode()
+The flat screen distance slider (~line 1175) and any related controls should be
+visible regardless of runtime type. If they are currently gated behind OpenXR
+checks, remove those guards.
 ```
 
 ## Important Considerations
@@ -229,51 +264,50 @@ slightly worse visual quality than on OpenXR.
 
 Even when not submitting via `VRCompositor()->Submit()`, `WaitGetPoses()` must still be
 called each frame. Failing to do so causes `VRCompositorError_DoNotHaveFocus`. The existing
-`synchronize_frame()` handles this and should continue running regardless of view mode.
+`synchronize_frame()` in `OpenVR.cpp:6` handles this and continues running regardless of
+whether we submit to the compositor or overlay.
 
 ### Overlay Conflict Prevention
 
-The existing `OverlayComponent` manages framework UI overlay and slate overlay. The new
-game-view overlay must:
-- Use a distinct overlay key (e.g., "VRFramework_GameView")
+The existing `OverlayComponent` manages a framework UI overlay and a slate overlay.
+The new game-view overlay must:
+- Use a distinct overlay key (`"VRFramework_GameView"`)
 - Not interfere with framework UI overlay visibility
-- Be hidden when returning to stereo mode
+- Be hidden when flat mode is deactivated
 
-### Cylinder Mode Details
+### AER Interaction
 
-OpenVR: `IVROverlay::SetOverlayCurvature(handle, curvature)` where curvature is [0..1],
-with 1 being a fully closed cylinder. Curvature = width / (2 * PI * radius).
+When flat mode is active, AER (Alternate Eye Rendering) frame parity still controls which
+eye texture gets rendered. But since we only submit the left eye to the overlay quad (visible
+to both eyes), the right eye frame can either:
+- Also submit the same left eye texture (simplest — slight latency on alternating frames)
+- Be skipped entirely for overlay submission (only update on left eye frames)
 
-OpenXR: `XrCompositionLayerCylinderKHR` with explicit radius, centralAngle, aspectRatio.
-Requires `XR_KHR_composition_layer_cylinder` extension (already checked by
-`is_cylinder_layer_allowed()`).
+The second approach is cleaner: only submit to the overlay on left-eye frames, do nothing
+on right-eye frames. This matches how OpenXR handles it — the quad layer uses a single
+swapchain image visible to both eyes.
 
 ## Implementation Order
 
-1. Add `ViewMode` enum and virtual methods to `VRRuntime.hpp`
-2. Implement `OpenVR::set_view_mode()` / `supports_view_mode()` / `active_view_mode()`
-3. Add game-view overlay to `OverlayComponent` (create, show, hide, submit texture)
-4. Add guards in `D3D11Component.cpp` OpenVR submission blocks
-5. Add guards in `D3D12Component.cpp` OpenVR submission blocks
-6. Refactor `OpenXR::end_frame()` to use `active_view_mode()`
-7. Remove OpenVR guard from `ModSettings.cpp`
-8. Enable UI sliders for OpenVR in `VR.cpp`
-9. Test stereo mode still works on both runtimes (regression)
-10. Test flat mode on OpenVR
-11. Add `FLAT_CYLINDER` support (incremental follow-up)
+1. Add game-view overlay to `OverlayComponent` (create during init, show/hide/submit methods)
+2. Add guards in `D3D11Component.cpp` OpenVR submission blocks
+3. Add guards in `D3D12Component.cpp` OpenVR submission blocks
+4. Remove OpenVR guard from `ModSettings.cpp`
+5. Enable UI sliders for OpenVR in `VR.cpp`
+6. Test stereo mode still works on both runtimes (regression)
+7. Test flat mode on OpenVR
 
 ## Key File References
 
-| File | Lines | Relevance |
-|------|-------|-----------|
-| `src/ModSettings.cpp` | 8-16 | OpenVR guard to remove |
-| `src/mods/vr/runtimes/VRRuntime.hpp` | 14-167 | Base class — add ViewMode |
-| `src/mods/vr/runtimes/OpenXR.cpp` | 1392-1513 | end_frame() — refactor mode check |
-| `src/mods/vr/runtimes/OpenVR.hpp` | 6-54 | Add view mode state |
-| `src/mods/vr/runtimes/OpenVR.cpp` | 6-194 | Add view mode methods |
-| `src/mods/vr/OverlayComponent.hpp` | 16-165 | Add game view overlay |
-| `src/mods/vr/OverlayComponent.cpp` | 15-71 | Init game view overlay |
-| `src/mods/vr/D3D11Component.cpp` | 308-337, 380-414 | Add flat mode guards |
-| `src/mods/vr/D3D12Component.cpp` | 97-143, 163-211 | Add flat mode guards |
-| `src/mods/VR.cpp` | 1175-1192 | Enable UI for OpenVR |
-| `extern/openvr/headers/openvr.h` | 3849, 3944-3949 | IVROverlay API reference |
+| File | Lines | What to Change |
+|------|-------|----------------|
+| `src/ModSettings.cpp` | 12-14 | Remove OpenVR guard |
+| `src/mods/vr/OverlayComponent.hpp` | 75-78 | Add game view overlay handle + methods |
+| `src/mods/vr/OverlayComponent.cpp` | 15-71 | Init game view overlay, add submit methods |
+| `src/mods/vr/D3D11Component.cpp` | 308-337 | Add flat mode guard (left eye) |
+| `src/mods/vr/D3D11Component.cpp` | 380-414 | Add flat mode guard (right eye) |
+| `src/mods/vr/D3D12Component.cpp` | 97-143 | Add flat mode guard (left eye) |
+| `src/mods/vr/D3D12Component.cpp` | 163-211 | Add flat mode guard (right eye) |
+| `src/mods/VR.cpp` | 1175-1192 | Enable UI sliders for OpenVR |
+| `src/mods/vr/runtimes/OpenXR.cpp` | 1420 | No changes — already uses showFlatScreenDisplay() |
+| `src/mods/vr/runtimes/OpenVR.cpp` | — | No changes needed |
