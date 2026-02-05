@@ -145,7 +145,8 @@ private:
 
         }
         std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_framework_ui_quad();
-        
+        std::optional<std::reference_wrapper<XrCompositionLayerQuad>> generate_slate_quad();
+
     private:
         XrCompositionLayerQuad m_slate_layer{};
         XrCompositionLayerQuad m_slate_layer_right{};
@@ -161,5 +162,6 @@ private:
     void update_input_openvr();
     void update_input_mouse_emulation();
     void update_overlay_openvr();
+    void update_slate_openvr();
     bool update_wrist_overlay_openvr();
 };}

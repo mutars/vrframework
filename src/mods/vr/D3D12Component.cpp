@@ -1,6 +1,7 @@
 #include <openvr.h>
 #include <utility/ScopeGuard.hpp>
 #include <aer/ConstantsPool.h>
+#include <ModSettings.h>
 
 #include "mods/VR.hpp"
 
@@ -233,6 +234,13 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
             std::vector<XrCompositionLayerBaseHeader*> quad_layers{};
 
             auto& openxr_overlay = vr->get_overlay_component().get_openxr();
+
+            if (ModSettings::showFlatScreenDisplay()) {
+                const auto slate_quad = openxr_overlay.generate_slate_quad();
+                if (slate_quad) {
+                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&slate_quad->get());
+                }
+            }
 
             if (m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::FRAMEWORK_UI)) {
                 const auto framework_quad = openxr_overlay.generate_framework_ui_quad();
