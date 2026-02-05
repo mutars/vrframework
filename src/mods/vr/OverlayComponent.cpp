@@ -3,6 +3,7 @@
 
 #include "../VR.hpp"
 #include "Framework.hpp"
+#include "ModSettings.h"
 #include "utility/ImGui.hpp"
 
 #include "OverlayComponent.hpp"
@@ -175,7 +176,7 @@ void OverlayComponent::update_input_mouse_emulation() {
 
 void OverlayComponent::on_post_compositor_submit() {
     this->update_overlay_openvr();
-//    this->update_slate_openvr();
+    this->update_slate_openvr();
 }
 
 
@@ -194,36 +195,36 @@ void OverlayComponent::on_config_load(const utility::Config& cfg, bool set_defau
 void OverlayComponent::on_draw_ui() {
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
     if (ImGui::TreeNode("Overlay Options")) {
-//        if (VR::get()->get_runtime()->is_cylinder_layer_allowed()) {
-//            m_slate_overlay_type->draw("Overlay Type");
-//
-//            if ((OverlayType)m_slate_overlay_type->value() == OverlayType::CYLINDER)  {
-//                m_slate_cylinder_angle->draw("UI Cylinder Angle");
-//            }
-//        }
-//
-//        float ui_offset[] { m_slate_x_offset->value(), m_slate_y_offset->value(), m_slate_distance->value() };
-//
-//        if (ImGui::SliderFloat3("UI Offset", ui_offset, -10.0f, 10.0f)) {
-//            m_slate_x_offset->value() = ui_offset[0];
-//            m_slate_y_offset->value() = ui_offset[1];
-//            m_slate_distance->value() = ui_offset[2];
-//        }
+        if (ModSettings::showFlatScreenDisplay()) {
+            ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+            if (ImGui::TreeNode("Flat Screen Display")) {
+                m_slate_distance->draw("Distance");
+                m_slate_size->draw("Size");
 
-//        m_slate_distance->draw("UI Distance");
-//        m_slate_size->draw("UI Size");
-//        m_ui_follows_view->draw("UI Follows View");
-//        ImGui::SameLine();
-//        m_ui_invert_alpha->draw("UI Invert Alpha");
+                float ui_offset[]{m_slate_x_offset->value(), m_slate_y_offset->value()};
+                if (ImGui::SliderFloat2("XY Offset", ui_offset, -10.0f, 10.0f)) {
+                    m_slate_x_offset->value() = ui_offset[0];
+                    m_slate_y_offset->value() = ui_offset[1];
+                }
 
-        m_framework_distance->draw("Framework Distance");
-        m_framework_size->draw("Framework Size");
-        m_framework_ui_follows_view->draw("Framework Follows View");
-//        if (VR::get()->get_runtime()->is_openvr()) {
-//            ImGui::SameLine();
-//            m_framework_wrist_ui->draw("Framework Wrist UI");
-//        }
-        m_framework_mouse_emulation->draw("Framework Mouse Emulation");
+                m_ui_follows_view->draw("Follows View");
+                ImGui::TreePop();
+            }
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+        if (ImGui::TreeNode("Framework UI")) {
+            m_framework_distance->draw("Distance");
+            m_framework_size->draw("Size");
+            m_framework_ui_follows_view->draw("Follows View");
+            if (VR::get()->get_runtime()->is_openvr()) {
+                ImGui::SameLine();
+                m_framework_wrist_ui->draw("Wrist UI");
+            }
+            m_framework_mouse_emulation->draw("Mouse Emulation");
+            ImGui::TreePop();
+        }
+
         ImGui::TreePop();
     }
 }
@@ -305,89 +306,107 @@ void OverlayComponent::update_input_openvr() {
     }
 }
 
-//void OverlayComponent::update_slate_openvr() {
-//    auto vr = VR::get();
-//
-//    if (!vr->get_runtime()->is_openvr()) {
-//        return;
-//    }
-//
-//    if (!vr->is_gui_enabled()) {
-//        vr::VROverlay()->ClearOverlayTexture(m_slate_overlay_handle);
-//        return;
-//    }
-//
-//    const auto is_d3d11 = g_framework->get_renderer_type() == GOWVR::RendererType::D3D11;
-//
-//    // TODO: do the sizing / scaling calculations below need to take into account non-standard VRTextureBounds_t
-//    // when we force a symmetrical eye projection matrix?
-//    vr::VRTextureBounds_t bounds{};
-//    bounds.uMin = 0.0f;
-//    bounds.uMax = 1.0f;
-//    bounds.vMin = 0.0f;
-//    bounds.vMax = 1.0f;
-//
-//    vr::VROverlay()->SetOverlayTextureBounds(m_slate_overlay_handle, &bounds);
-//
-//    vr::TrackedDevicePose_t pose{};
-//    vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
-//
-//    auto rotation_offset = glm::inverse(vr->get_rotation_offset());
-//
-////    if (vr->is_decoupled_pitch_enabled() && vr->is_decoupled_pitch_ui_adjust_enabled()) {
-////        const auto pre_flat_rotation = vr->get_pre_flattened_rotation();
-////        const auto pre_flat_pitch = utility::math::pitch_only(pre_flat_rotation);
-////
-////        // Add the inverse of the pitch rotation to the rotation offset
-////        rotation_offset = glm::normalize(glm::inverse(pre_flat_pitch * vr->get_rotation_offset()));
-////    }
-//
-//    //auto glm_matrix = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-//    auto glm_matrix = Matrix4x4f{rotation_offset};
-//    if (m_ui_follows_view->value()) {
-//        const auto mat = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
-//        glm_matrix = glm::extractMatrixRotation(mat);
-//        glm_matrix[3] += mat[3];
-//    } else {
-//        glm_matrix[3] += vr->get_standing_origin();
-//    }
-//
-//    glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
-//    glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
-//    glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
-//    glm_matrix[3].w = 1.0f;
-//
-//    const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
-//    vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
-//
-//    const auto is_d3d12 = g_framework->get_renderer_type() == GOWVR::RendererType::D3D12;
-//    const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
-//    const auto aspect = size.x / size.y;
-//    const auto width_meters = m_slate_size->value() * aspect;
-//    vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, width_meters);
-//
-//    if (is_d3d11) {
-//        if (vr->m_d3d11.get_ui_tex().Get() == nullptr) {
-//            return;
-//        }
-//
-//        vr::Texture_t ui_tex{(void*)vr->m_d3d11.get_ui_tex().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
-//        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &ui_tex);
-//    } else {
-//        if (vr->m_d3d12.get_openvr_ui_tex().texture.Get() == nullptr) {
-//            return;
-//        }
-//
-//        vr::D3D12TextureData_t overlay_tex {
-//            vr->m_d3d12.get_openvr_ui_tex().texture.Get(),
-//            g_framework->get_d3d12_hook()->get_command_queue(),
-//            0
-//        };
-//
-//        vr::Texture_t ui_tex{(void*)&overlay_tex, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
-//        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &ui_tex);
-//    }
-//}
+void OverlayComponent::update_slate_openvr() {
+    if (!VR::get()->get_runtime()->is_openvr()) {
+        return;
+    }
+
+    if (!ModSettings::showFlatScreenDisplay()) {
+        vr::VROverlay()->ClearOverlayTexture(m_slate_overlay_handle);
+        vr::VROverlay()->HideOverlay(m_slate_overlay_handle);
+        return;
+    }
+
+    auto& vr = VR::get();
+
+    vr::VROverlay()->ShowOverlay(m_slate_overlay_handle);
+
+    vr::VRTextureBounds_t bounds{};
+    bounds.uMin = 0.0f;
+    bounds.uMax = 1.0f;
+    bounds.vMin = 0.0f;
+    bounds.vMax = 1.0f;
+    vr::VROverlay()->SetOverlayTextureBounds(m_slate_overlay_handle, &bounds);
+
+    auto glm_matrix = glm::inverse(vr->get_transform_offset());
+
+    if (m_ui_follows_view->value()) {
+        vr::TrackedDevicePose_t pose{};
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+        const auto mat = glm::rowMajor4(Matrix4x4f{*(Matrix3x4f*)&pose.mDeviceToAbsoluteTracking});
+        glm_matrix = glm::extractMatrixRotation(mat);
+        glm_matrix[3] += mat[3];
+    }
+
+    glm_matrix[3] -= glm_matrix[2] * m_slate_distance->value();
+    glm_matrix[3] += m_slate_x_offset->value() * glm_matrix[0];
+    glm_matrix[3] += m_slate_y_offset->value() * glm_matrix[1];
+    glm_matrix[3].w = 1.0f;
+
+    const auto steamvr_matrix = Matrix3x4f{glm::rowMajor4(glm_matrix)};
+    vr::VROverlay()->SetOverlayTransformAbsolute(m_slate_overlay_handle, vr::TrackingUniverseStanding, (vr::HmdMatrix34_t*)&steamvr_matrix);
+
+    const auto is_d3d11 = g_framework->get_renderer_type() == Framework::RendererType::D3D11;
+    const auto is_d3d12 = g_framework->get_renderer_type() == Framework::RendererType::D3D12;
+    const auto size = is_d3d12 ? g_framework->get_d3d12_rt_size() : g_framework->get_d3d11_rt_size();
+    const auto aspect = size.x / size.y;
+    const auto width_meters = m_slate_size->value() * aspect;
+    vr::VROverlay()->SetOverlayWidthInMeters(m_slate_overlay_handle, width_meters);
+
+    if (is_d3d11) {
+        vr::Texture_t slate_tex{(void*)g_framework->get_rendertarget_d3d11().Get(), vr::TextureType_DirectX, vr::ColorSpace_Auto};
+        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &slate_tex);
+    } else if (is_d3d12) {
+        auto& hook = g_framework->get_d3d12_hook();
+
+        vr::D3D12TextureData_t texture_data{
+            g_framework->get_rendertarget_d3d12().Get(),
+            hook->get_command_queue(),
+            0
+        };
+
+        vr::Texture_t slate_tex{(void*)&texture_data, vr::TextureType_DirectX12, vr::ColorSpace_Auto};
+        vr::VROverlay()->SetOverlayTexture(m_slate_overlay_handle, &slate_tex);
+    }
+
+    if (vr->is_using_controllers()) {
+        const auto controller_index = !vr->m_swap_controllers->value() ? vr->get_right_controller_index() : vr->get_left_controller_index();
+        const auto right_controller_rot = glm::quat{vr->get_rotation(controller_index)};
+        const auto right_controller_pos = glm::vec3{vr->get_position(controller_index)};
+
+        const auto start = right_controller_pos;
+        auto fwd = (right_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f});
+
+        const auto plane_pos = glm::vec3{glm_matrix[3]};
+        const auto height_meters = m_slate_size->value();
+
+        float intersection_distance = 0.0f;
+
+        if (glm::intersectRayPlane<glm::vec3>(start, fwd, plane_pos, glm::normalize(glm::vec3{glm_matrix[2]}), intersection_distance)) {
+            const auto intersection_point = start + (fwd * intersection_distance);
+            const auto local_point = glm::inverse(glm_matrix) * glm::vec4{intersection_point, 1.0f};
+
+            const auto w_half = width_meters / 2.0f;
+            const auto h_half = height_meters / 2.0f;
+
+            if (local_point.x >= -w_half && local_point.x <= w_half && local_point.y >= -h_half && local_point.y <= h_half) {
+                const auto x = (local_point.x + w_half) / width_meters;
+                const auto y = (height_meters - (local_point.y + h_half)) / height_meters;
+
+                m_intersect_state.quad_intersection_point = {x, y};
+                m_intersect_state.intersecting = true;
+
+                const auto client_x = (int32_t)(size.x * x);
+                const auto client_y = (int32_t)(size.y * y);
+                m_intersect_state.swapchain_intersection_point = {client_x, client_y};
+            } else {
+                m_intersect_state.intersecting = false;
+            }
+        }
+    } else {
+        m_intersect_state.intersecting = false;
+    }
+}
 
 bool OverlayComponent::update_wrist_overlay_openvr() {
     if (!VR::get()->get_runtime()->is_openvr()) {
@@ -879,6 +898,90 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
         }
     } else {
         m_parent->m_framework_intersect_state.intersecting = false;
+    }
+
+    return layer;
+}
+
+std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::OpenXR::generate_slate_quad() {
+    if (!ModSettings::showFlatScreenDisplay()) {
+        m_parent->m_intersect_state.intersecting = false;
+        return std::nullopt;
+    }
+
+    auto& vr = VR::get();
+
+    auto& layer = this->m_slate_layer;
+
+    const auto& swapchain = vr->m_openxr->swapchains[(uint32_t)runtimes::OpenXR::SwapchainIndex::AFR_LEFT_EYE];
+
+    layer.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    layer.subImage.swapchain = swapchain.handle;
+    layer.subImage.imageRect.offset = {0, 0};
+    layer.subImage.imageRect.extent = {swapchain.width, swapchain.height};
+    layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    layer.eyeVisibility = XrEyeVisibility::XR_EYE_VISIBILITY_BOTH;
+
+    auto glm_matrix = glm::identity<glm::mat4>();
+
+    if (m_parent->m_ui_follows_view->value()) {
+        layer.space = vr->m_openxr->view_space;
+    } else {
+        glm_matrix = glm::inverse(vr->get_transform_offset());
+        layer.space = vr->m_openxr->stage_space;
+    }
+
+    const auto size_meters = m_parent->m_slate_size->value();
+    const float aspect_ratio = (float)swapchain.width / (float)swapchain.height;
+    const auto meters_w = size_meters * aspect_ratio;
+    const auto meters_h = size_meters;
+
+    layer.size = {meters_w, meters_h};
+
+    glm_matrix[3] -= glm_matrix[2] * m_parent->m_slate_distance->value();
+    glm_matrix[3] += m_parent->m_slate_x_offset->value() * glm_matrix[0];
+    glm_matrix[3] += m_parent->m_slate_y_offset->value() * glm_matrix[1];
+    glm_matrix[3].w = 1.0f;
+
+    layer.pose.orientation = runtimes::OpenXR::to_openxr(glm::quat_cast(glm_matrix));
+    layer.pose.position = runtimes::OpenXR::to_openxr(glm_matrix[3]);
+
+    if (vr->is_using_controllers()) {
+        const auto controller_index = !vr->m_swap_controllers->value() ? vr->get_right_controller_index() : vr->get_left_controller_index();
+        const auto right_controller_rot = glm::quat{vr->get_rotation(controller_index)};
+        const auto right_controller_pos = glm::vec3{vr->get_position(controller_index)};
+
+        const auto start = right_controller_pos;
+        auto fwd = (right_controller_rot * glm::vec3{0.0f, 0.0f, -1.0f});
+
+        const auto plane_pos = glm::vec3{glm_matrix[3]};
+
+        float intersection_distance = 0.0f;
+        if (glm::intersectRayPlane<glm::vec3>(start, fwd, plane_pos, glm::normalize(glm::vec3{glm_matrix[2]}), intersection_distance)) {
+            const auto intersection_point = start + (fwd * intersection_distance);
+            const auto local_point = glm::inverse(glm_matrix) * glm::vec4{intersection_point, 1.0f};
+
+            const auto w_half = meters_w / 2.0f;
+            const auto h_half = meters_h / 2.0f;
+
+            if (local_point.x >= -w_half && local_point.x <= w_half && local_point.y >= -h_half && local_point.y <= h_half) {
+                const auto x = (local_point.x + w_half) / meters_w;
+                const auto y = (meters_h - (local_point.y + h_half)) / meters_h;
+
+                m_parent->m_intersect_state.quad_intersection_point = {x, y};
+                m_parent->m_intersect_state.intersecting = true;
+
+                if (swapchain.handle) {
+                    const auto client_x = (int32_t)((float)swapchain.width * x);
+                    const auto client_y = (int32_t)((float)swapchain.height * y);
+                    m_parent->m_intersect_state.swapchain_intersection_point = {client_x, client_y};
+                }
+            } else {
+                m_parent->m_intersect_state.intersecting = false;
+            }
+        }
+    } else {
+        m_parent->m_intersect_state.intersecting = false;
     }
 
     return layer;

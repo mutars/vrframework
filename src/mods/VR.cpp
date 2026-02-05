@@ -1172,12 +1172,6 @@ void VR::on_draw_ui() {
             m_openxr->resolution_scale = m_resolution_scale->value();
         }
 
-        m_flat_screen_distance->draw("Flat Screen Distance");
-        if (ImGui::IsItemDeactivatedAfterEdit())
-        {
-            get_runtime()->m_flat_screen_distance = m_flat_screen_distance->value();
-        }
-
         m_horizontal_fov_scale->draw("Horizontal FOV Scale");
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             get_runtime()->m_horizontal_fov_scale = m_horizontal_fov_scale->value();
@@ -1316,7 +1310,6 @@ void VR::on_config_load(const utility::Config& cfg, bool set_defaults) {
         get_runtime()->m_horizontal_fov_scale = m_horizontal_fov_scale->value();
         get_runtime()->m_vertical_fov_scale = m_vertical_fov_scale->value();
         get_runtime()->m_extended_fov_range = m_extended_fov_rage->value();
-        get_runtime()->m_flat_screen_distance = m_flat_screen_distance->value();
     }
     m_overlay_component.on_config_load(cfg, set_defaults);
 

@@ -161,7 +161,6 @@ struct VRRuntime {
     float m_vertical_fov_scale = 1.f;
     bool m_extended_fov_range = false;
     Matrix4x4f m_center_stage = Matrix4x4f{1.0f};
-    float m_flat_screen_distance = 1.5f;
 
     SynchronizeStage custom_stage{SynchronizeStage::EARLY};
 };
