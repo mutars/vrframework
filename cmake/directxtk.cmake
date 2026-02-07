@@ -7,6 +7,8 @@ FetchContent_Declare(
         GIT_TAG "f5026eb34e7053b1aff325d38db107703f394974"
 )
 message("Fetching directxtk")
+# Disable XWBTool to avoid generating the xwbtool target.
+set(BUILD_TOOLS OFF CACHE BOOL "Build XWBTool" FORCE)
 FetchContent_MakeAvailable(DirectXTK)
 
 # directxtk
