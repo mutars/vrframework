@@ -22,6 +22,10 @@
 
 #include "Mod.hpp"
 
+#ifndef VR_DEFAULT_SYNC_INTERVAL
+#define VR_DEFAULT_SYNC_INTERVAL 0
+#endif
+
 class VR : public Mod {
 public:
     inline VR() {
@@ -602,7 +606,7 @@ private:
         "VeryLate"
     };
 
-    const ModCombo::Ptr m_sync_interval{ ModCombo::create(generate_name("SyncInterval"), s_sync_interval_options, 0) };
+    const ModCombo::Ptr m_sync_interval{ ModCombo::create(generate_name("SyncInterval"), s_sync_interval_options, VR_DEFAULT_SYNC_INTERVAL) };
 
     const ModKey::Ptr m_recenter_view_key{ ModKey::create(generate_name("RecenterViewKey")) };
     const ModToggle::Ptr m_decoupled_pitch{ ModToggle::create(generate_name("DecoupledPitch"), false) };
