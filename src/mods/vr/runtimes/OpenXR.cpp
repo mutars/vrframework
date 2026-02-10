@@ -1405,7 +1405,6 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
 
     std::vector<XrCompositionLayerBaseHeader*> layers{};
     std::vector<XrCompositionLayerProjectionView> projection_layer_views{};
-    std::vector<XrCompositionLayerQuad> l_quad_layers{};
 
 
     // we CANT push the layers every time, it cause some layer error
@@ -1416,8 +1415,8 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
     auto r_frame = frame % 2 == 0 ? frame - 1 : frame;
 
     if (current_pipeline->frame_state.shouldRender == XR_TRUE) {
-        projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
         if (!ModSettings::showFlatScreenDisplay()) {
+            projection_layer_views.resize(current_pipeline->stage_views.size(), {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
             for (auto i = 0; i < projection_layer_views.size(); ++i) {
                 const auto& swapchain = this->swapchains[i];
                 int         actual_frame = i == 0 ? l_frame : r_frame;
@@ -1428,10 +1427,10 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                 projection_layer_views[i].subImage.swapchain = swapchain.handle;
                 int32_t offset_x = 0, offset_y = 0, extent_x = 0, extent_y = 0;
                 int texture_area_width = swapchain.width;
-    
+
                 offset_x = (int32_t)(view_bounds[i][0] * (float)texture_area_width);
                 extent_x = (int32_t)(view_bounds[i][1] * (float)texture_area_width) - offset_x;
-    
+
                 offset_y = (int32_t)(view_bounds[i][2] * (float)swapchain.height);
                 extent_y = (int32_t)(view_bounds[i][3] * (float)swapchain.height) - offset_y;
                 if(m_horizontal_fov_scale < 1.0f || m_vertical_fov_scale < 1.0f) {
@@ -1443,48 +1442,15 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
                     projection_layer_views[i].subImage.imageRect.offset = {offset_x, offset_y};
                     projection_layer_views[i].subImage.imageRect.extent = {extent_x, extent_y};
                 }
-
             }
             XrCompositionLayerProjection layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
             layer.space = this->stage_space;
             layer.viewCount = (uint32_t)projection_layer_views.size();
             layer.views = projection_layer_views.data();
             layers.push_back((XrCompositionLayerBaseHeader*)&layer);
-
-        } else {
-            l_quad_layers.resize(1);
-            // Initialize quad layers for each eye
-            for (size_t i = 0; i < 1; ++i) {
-                const auto& swapchain = this->swapchains[i];
-                
-                l_quad_layers[i] = {XR_TYPE_COMPOSITION_LAYER_QUAD};
-                l_quad_layers[i].next = nullptr;
-                l_quad_layers[i].layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-                l_quad_layers[i].space = this->stage_space;
-                l_quad_layers[i].eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                
-                // Configure swapchain
-                l_quad_layers[i].subImage.swapchain = swapchain.handle;
-                l_quad_layers[i].subImage.imageRect.offset = {0, 0};
-                l_quad_layers[i].subImage.imageRect.extent = {(int32_t)swapchain.width, (int32_t)swapchain.height};
-
-                {
-                    auto flat_screen = glm::mat4(1.0f);
-                    flat_screen[3][2] = -m_flat_screen_distance;
-                    flat_screen = m_center_stage * flat_screen;
-                    auto rotation = glm::normalize(glm::quat_cast(flat_screen));
-                    l_quad_layers[i].pose.orientation = to_openxr(rotation);
-                    l_quad_layers[i].pose.position = {flat_screen[3][0], flat_screen[3][1], flat_screen[3][2]};
-                }
-
-                // Set size (2m wide, maintain aspect ratio)
-                float aspect_ratio = (float)swapchain.width / (float)swapchain.height;
-                l_quad_layers[i].size = {2.0f, 2.0f / aspect_ratio};
-
-                layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&l_quad_layers[i]));
-            }
         }
-        for(auto layer : quad_layers) {
+
+        for (auto layer : quad_layers) {
             layers.push_back(layer);
         }
     }
