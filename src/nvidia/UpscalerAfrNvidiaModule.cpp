@@ -7,6 +7,7 @@
 #include <experimental/DebugUtils.h>
 #include <imgui.h>
 #include <mods/VR.hpp>
+#include <nvidia/streamline_compat.h>
 #include <spdlog/spdlog.h>
 
 std::optional<std::string> UpscalerAfrNvidiaModule::on_initialize()
@@ -90,13 +91,15 @@ void UpscalerAfrNvidiaModule::InstallHooks()
         spdlog::error("Failed to hook slSetConstants");
     }
 
-    using get_feature_funciton = sl::Result (*)(sl::Feature feature, const char* functionName, void*& function);
-    auto get_feature_function = (get_feature_funciton) GetProcAddress(p_hm_sl_interposter, "slGetFeatureFunction");
-    void* dlssSetOptionsFn;
-    get_feature_function(sl::kFeatureDLSS, "slDLSSSetOptions", dlssSetOptionsFn);
-    m_dlss_set_options_hook = std::make_unique<FunctionHook>((void**)dlssSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssSetOptions);
-    if (!m_dlss_set_options_hook->create()) {
-        spdlog::error("Failed to hook slSetOptions");
+    void* dlssSetOptionsFn = nullptr;
+    if (!slcompat::slCompatGetFeatureFunction(p_hm_sl_interposter, sl::kFeatureDLSS, "slDLSSSetOptions", dlssSetOptionsFn)) {
+        spdlog::error("Failed to find slDLSSSetOptions");
+    }
+    if (dlssSetOptionsFn) {
+        m_dlss_set_options_hook = std::make_unique<FunctionHook>((void**)dlssSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssSetOptions);
+        if (!m_dlss_set_options_hook->create()) {
+            spdlog::error("Failed to hook slSetOptions");
+        }
     }
 //    void* slDLSSDSetOptionsFn;
 //    get_feature_function(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", slDLSSDSetOptionsFn);
@@ -106,11 +109,15 @@ void UpscalerAfrNvidiaModule::InstallHooks()
 //    }
 
 #ifdef STREAMLINE_DLSS_RR
-    void* slDLSSDSetOptionsFn;
-    get_feature_function(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", slDLSSDSetOptionsFn);
-    m_dlssrr_set_options_hook = std::make_unique<FunctionHook>((void**)slDLSSDSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssrrSetOptions);
-    if (!m_dlssrr_set_options_hook->create()) {
-        spdlog::error("Failed to hook slDLSSDSetOptions");
+    void* slDLSSDSetOptionsFn = nullptr;
+    if (!slcompat::slCompatGetFeatureFunction(p_hm_sl_interposter, sl::kFeatureDLSS_RR, "slDLSSDSetOptions", slDLSSDSetOptionsFn)) {
+        spdlog::error("Failed to find slDLSSDSetOptions");
+    }
+    if (slDLSSDSetOptionsFn) {
+        m_dlssrr_set_options_hook = std::make_unique<FunctionHook>((void**)slDLSSDSetOptionsFn, (void*)&UpscalerAfrNvidiaModule::on_dlssrrSetOptions);
+        if (!m_dlssrr_set_options_hook->create()) {
+            spdlog::error("Failed to hook slDLSSDSetOptions");
+        }
     }
 #endif
 
@@ -198,15 +205,15 @@ void UpscalerAfrNvidiaModule::ReprojectMotionVectors(const sl::FrameToken& frame
 sl::Result UpscalerAfrNvidiaModule::on_slSetTag(sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
     static auto            instance    = UpscalerAfrNvidiaModule::Get();
-    static auto            original_fn = instance->m_set_tag_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetTag)>();
+    static auto            original_fn = instance->m_set_tag_hook->get_original<slcompat::SlSetTagFn>();
     static auto            vr          = VR::get();
     // spdlog::error("UNEXPECTED CALL TO slSetTag");
     // exit(1);
     if(vr->m_render_frame_count % 2 == 0 && instance->m_enabled->value()) {
         sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
-        return original_fn(afr_viewport_handle, tags, numTags, cmdBuffer);
+        return slcompat::slCompatSetTag(original_fn, afr_viewport_handle, tags, numTags, cmdBuffer);
     }
-    auto result = original_fn(viewport, tags, numTags, cmdBuffer);
+    auto result = slcompat::slCompatSetTag(original_fn, viewport, tags, numTags, cmdBuffer);
     return result;
 }
 
@@ -225,7 +232,7 @@ namespace {
 sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame, sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer)
 {
     static auto instance    = UpscalerAfrNvidiaModule::Get();
-    static auto original_fn = instance->m_evaluate_feature_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slEvaluateFeature)>();
+    static auto original_fn = instance->m_evaluate_feature_hook->get_original<slcompat::SlEvaluateFeatureFn>();
     static auto vr          = VR::get();
 //
 //    constexpr sl::BufferType kBufferTypeReactiveMaskHint = 36;
@@ -271,9 +278,9 @@ sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, co
                 afr_inputs[i] = inputs[i];
             }
         }
-        return original_fn(feature, frame, afr_inputs.data(), numInputs, cmdBuffer);
+        return slcompat::slCompatEvaluateFeature(original_fn, feature, frame, afr_inputs.data(), numInputs, cmdBuffer);
     }
-    auto result = original_fn(feature, frame, inputs, numInputs, cmdBuffer);
+    auto result = slcompat::slCompatEvaluateFeature(original_fn, feature, frame, inputs, numInputs, cmdBuffer);
     return result;
 }
 
@@ -281,7 +288,7 @@ sl::Result UpscalerAfrNvidiaModule::on_slEvaluateFeature(sl::Feature feature, co
 sl::Result UpscalerAfrNvidiaModule::on_slSetConstants(sl::Constants& values, const sl::FrameToken& frame, sl::ViewportHandle& viewport)
 {
     static auto instance = UpscalerAfrNvidiaModule::Get();
-    static auto original_fn = instance->m_set_constants_hook->get_original<decltype(UpscalerAfrNvidiaModule::on_slSetConstants)>();
+    static auto original_fn = instance->m_set_constants_hook->get_original<slcompat::SlSetConstantsFn>();
 #ifdef MOTION_VECTOR_REPROJECTION
     instance->m_motion_vector_reprojection.m_mvecScale.x = values.mvecScale.x;
     instance->m_motion_vector_reprojection.m_mvecScale.y = values.mvecScale.y;
@@ -296,9 +303,9 @@ sl::Result UpscalerAfrNvidiaModule::on_slSetConstants(sl::Constants& values, con
 
     if(frame % 2 == 0 && instance->m_enabled->value()) {
         sl::ViewportHandle afr_viewport_handle{instance->m_afr_viewport_id};
-        return original_fn(values, frame, afr_viewport_handle);
+        return slcompat::slCompatSetConstants(original_fn, values, frame, afr_viewport_handle);
     }
-    auto result = original_fn(values, frame, viewport);
+    auto result = slcompat::slCompatSetConstants(original_fn, values, frame, viewport);
     return result;
 }
 
